@@ -58,6 +58,7 @@ final class WatchHistory {
                 e.position = Math.max(0, o.optInt("position"));
                 e.duration = Math.max(0, o.optInt("duration"));
                 e.updated = o.optLong("updated");
+                if (Safety.hideRecord(e.title)) continue;
                 if (!e.site.isEmpty() && !e.id.isEmpty() && keys.add(e.key())) out.add(e);
             }
         } catch (Exception ignored) {
