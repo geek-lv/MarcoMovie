@@ -80,7 +80,8 @@ final class CatalogScreen {
                     return Cms.listing(
                             search != null
                                     ? selected.search(search, page)
-                                    : selected.category(cat, page));
+                                    : selected.category(cat, page),
+                            s);
                 },
                 list -> {
                     if (list.videos.isEmpty()) a.paragraph("这一页没有影片。");

@@ -689,10 +689,28 @@ public class MoviePlayer {
     }
 
     public void seekTo(int ms) {
+        final int target = Math.max(0, ms);
+        // 所有用户发起的 seek（遥控器、进度条、手势、跳过片头）统一在此通知状态机重锚。
+        // 放在 MoviePlayer 而不是各调用点，一处覆盖，避免漏挂。
+        com.pilipala.marcomovie.adskip.AdSkipController.get().onSeek(target, true);
         onMain(
                 () -> {
                     check();
-                    exo.seekTo(Math.max(0, ms));
+                    exo.seekTo(target);
+                    return null;
+                });
+    }
+
+    /**
+     * 口播跳过的程序化跳转专用入口：不通知状态机。
+     * 若走 {@link #seekTo(int)} 会被当成用户拖动而清掉「已跳区间」，破坏幂等。
+     */
+    public void seekToFromAdSkip(int ms) {
+        final int target = Math.max(0, ms);
+        onMain(
+                () -> {
+                    check();
+                    exo.seekTo(target);
                     return null;
                 });
     }

@@ -303,6 +303,11 @@ public final class MainActivity extends Activity {
     /** Opens a list card without leaving an invisible redirect page in the back stack. */
     void openListing(Cms.Site s, Cms.Video v) {
         if (v == null) return;
+        // 详情入口兜底：外部跳转 / 历史 / 收藏等不经过 Cms.listing 的路径也拦住
+        if (Safety.hideItem(v)) {
+            toast("该内容已被内容安全过滤");
+            return;
+        }
         if (v.action != null && !v.action.isEmpty()) {
             sourceAction(s, v.action);
             return;
@@ -536,6 +541,36 @@ public final class MainActivity extends Activity {
         prefs = getSharedPreferences(privateMode ? "movie-private" : Prefs.FILE, MODE_PRIVATE);
         reduced = prefs.getBoolean(Prefs.REDUCED, false);
         configOrigin = prefs.getString("origin", "");
+        // ---- 移植功能初始化 ----
+        // 内容过滤只读 SharedPreferences，主线程初始化即可；KWS 模型加载要数秒，必须放后台。
+        com.pilipala.marcomovie.safety.ContentFilterConfig.init(this);
+        com.pilipala.marcomovie.safety.AdultSourceStats.init(this);
+        final com.pilipala.marcomovie.adskip.AdSkipController adSkip =
+                com.pilipala.marcomovie.adskip.AdSkipController.get();
+        new Thread(() -> adSkip.init(MainActivity.this), "adskip-engine-init").start();
+        // 命中后回主线程 seek；播放器实例会随换集更换，因此每次动态取 player 字段。
+        adSkip.setSeekHandler(
+                new com.pilipala.marcomovie.adskip.AdSkipController.SeekHandler() {
+                    public void seekTo(long positionMs) {
+                        ui.post(
+                                () -> {
+                                    MoviePlayer p = player;
+                                    if (p != null && prepared)
+                                        p.seekToFromAdSkip((int) positionMs);
+                                });
+                    }
+
+                    public void onAdSkipped(long fromMs, long toMs, String keyword) {
+                        ui.post(
+                                () ->
+                                        toast(
+                                                "识别到口播「"
+                                                        + keyword
+                                                        + "」，跳过 "
+                                                        + (toMs - fromMs) / 1000
+                                                        + " 秒"));
+                    }
+                });
         try {
             ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
             if (am != null) images.resize(ImageDecodePolicy.cacheBytes(am.getMemoryClass()));
@@ -1648,6 +1683,10 @@ public final class MainActivity extends Activity {
                         });
         ui.removeCallbacks(automaticUpdate);
         ui.postDelayed(automaticUpdate, 4000);
+        // 回到前台后重新锚定音频时钟（后台期间没有 PCM 输入）
+        if (player != null && prepared)
+            com.pilipala.marcomovie.adskip.AdSkipController.get()
+                    .onPlaybackStart(player.getCurrentPosition());
     }
 
     @Override
@@ -1684,6 +1723,7 @@ public final class MainActivity extends Activity {
         if (startupIntro != null) startupIntro.cancel();
         introSkipKey = false;
         savePlaybackHistory(true);
+        com.pilipala.marcomovie.adskip.AdSkipController.get().onPaused();
         foreground = false;
         super.onStop();
         if (player != null)
@@ -1708,6 +1748,7 @@ public final class MainActivity extends Activity {
         stopMagnet();
         generation++;
         releasePlayer();
+        com.pilipala.marcomovie.adskip.AdSkipController.get().destroy();
         closeEngines();
         cancelArtwork();
         cancelPageRequests();
