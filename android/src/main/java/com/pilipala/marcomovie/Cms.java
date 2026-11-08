@@ -606,7 +606,20 @@ public final class Cms {
         return v;
     }
 
+    /** 无来源上下文：解析后做兜底条目过滤（覆盖所有列表 / 搜索 / 详情 / 手机端路径）。 */
     public static Listing listing(String json) throws Exception {
+        return parseListing(json, null);
+    }
+
+    /**
+     * 带来源上下文：解析后做「整块判定 + 成人来源累计标记」。
+     * 可疑来源在交付界面之前整块丢弃，实现「首次搜索就不露头」。
+     */
+    public static Listing listing(String json, Site site) throws Exception {
+        return parseListing(json, site);
+    }
+
+    private static Listing parseListing(String json, Site site) throws Exception {
         JSONObject o = new JSONObject(json);
         Listing l = new Listing();
         l.page = Math.max(1, o.optInt("page", 1));
@@ -618,6 +631,8 @@ public final class Cms {
             JSONObject j = a.optJSONObject(i);
             if (j != null) l.videos.add(video(j));
         }
+        if (site != null) Safety.applyBlock(site.key, site.name, l.videos);
+        else Safety.filterItems(l.videos);
         return l;
     }
 

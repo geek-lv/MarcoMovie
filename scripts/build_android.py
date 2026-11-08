@@ -29,7 +29,7 @@ def main():
     if 'MARCOMOVIE_ANDROID_JAR' not in os.environ:
         from prepare_android_platform import prepare
         prepare()
-    dependencies=[];native_files={};native_files_mobile={};resource_dirs=[];packages=[]
+    dependencies=[];native_files={};native_files_mobile={};apk_resources={};resource_dirs=[];packages=[]
     items=json.loads((ROOT/'android/dependencies.json').read_text(encoding='utf-8'))
     for filename in ('media-dependencies.json','torrent-dependencies.json','decoder-dependencies.json'):
         manifest=ROOT/'android'/filename
@@ -59,6 +59,15 @@ def main():
                 if (unpack/'res').exists():resource_dirs.append(unpack/'res')
         else:
             if item.get('java_classes',True):dependencies.append(jar)
+            # 纯 javac/d8 构建不会自动带上 jar 内的运行时资源。按清单把它们原路径
+            # 写进 APK 根，例如 pinyin4j 的 Class.getResourceAsStream("/pinyindb/...")。
+            prefixes=item.get('apk_resources') or []
+            if prefixes:
+                with zipfile.ZipFile(jar) as z:
+                    for name in z.namelist():
+                        if name.endswith('/') or name.endswith('.class'):continue
+                        if any(name.startswith(p) for p in prefixes):apk_resources[name]=z.read(name)
+                print('Packaged jar resources:',len(apk_resources),'entries')
             if item.get('native_members'):
                 with zipfile.ZipFile(jar) as z:
                     for name in item['native_members']:
@@ -70,9 +79,31 @@ def main():
                             native_files_mobile[name]=data
                         elif name.startswith('lib/arm64-v8a/'):
                             native_files_mobile[name]=data
-    catpaw_files, catpaw_assets = build_catpaw()
+    # CatPaw 服务包需要 NDK + 上游 nodejs-mobile 二进制。只用普通 JSON/JS 订阅源时
+    # 可以跳过（默认行为不变）；缺 so 只影响运行时 CatPaw 引擎，不影响编译与常规播放。
+    if os.environ.get('MARCOMOVIE_SKIP_CATPAW') == '1':
+        catpaw_files = {}
+        catpaw_assets = BUILD / 'catpaw' / 'empty-assets'
+        catpaw_assets.mkdir(parents=True, exist_ok=True)
+        (catpaw_assets / '.keep').write_text('CatPaw disabled for this build\n', encoding='utf-8')
+        print('CatPaw: skipped (MARCOMOVIE_SKIP_CATPAW=1)')
+    else:
+        catpaw_files, catpaw_assets = build_catpaw()
     native_files.update({k:v for k,v in catpaw_files.items() if k.startswith('lib/armeabi-v7a/')})
     native_files_mobile.update(catpaw_files)
+    # 口播识别（sherpa-onnx + onnxruntime）的 native 库。TV 包保持纯 armeabi-v7a，
+    # 手机包同时带 v7a 与 arm64-v8a；缺库时引擎初始化会被 AdSkipController 捕获，不影响播放。
+    jni_root = SRC / 'jniLibs'
+    for abi in ('armeabi-v7a', 'arm64-v8a'):
+        abi_dir = jni_root / abi
+        if not abi_dir.is_dir():
+            continue
+        for so in sorted(abi_dir.glob('*.so')):
+            name = f'lib/{abi}/{so.name}'
+            data = so.read_bytes()
+            if abi == 'armeabi-v7a':
+                native_files[name] = data
+            native_files_mobile[name] = data
     for p in (exe(JDK/'bin','java'), exe(SDK,'aapt2'), ANDROID):
         if not p.exists(): raise RuntimeError(f'Required existing tool missing: {p}')
     for folder in (BUILD, BUILD/'classes', BUILD/'dex', DIST): folder.mkdir(parents=True, exist_ok=True)
@@ -88,7 +119,8 @@ def main():
     generated=BUILD/'generated';generated.mkdir(exist_ok=True)
     for old in generated.rglob('*.java'):old.unlink()
     extra=['--extra-packages',':'.join(sorted(set(packages)))] if packages else []
-    run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources.apk','--manifest',SRC/'AndroidManifest.xml','-I',ANDROID,'-A',SRC/'assets','-A',catpaw_assets,'--java',generated,'--auto-add-overlay',*extra,*overlays,'-R',BUILD/'resources.zip')
+    # sherpa-onnx 的 JNI 直接通过 AssetManager 读模型，未压缩更稳妥（也避免运行时解压开销）
+    run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources.apk','--manifest',SRC/'AndroidManifest.xml','-I',ANDROID,'-A',SRC/'assets','-A',catpaw_assets,'--java',generated,'--auto-add-overlay','-0','onnx',*extra,*overlays,'-R',BUILD/'resources.zip')
     sources=sorted((SRC/'java').rglob('*.java'))+sorted((ROOT/'shared/java').rglob('*.java'))+sorted(generated.rglob('*.java'))
     run(exe(JDK/'bin','javac'),'-encoding','UTF-8','-source','8','-target','8','-Xlint:-options','-classpath',os.pathsep.join(str(p) for p in [ANDROID,*dependencies]),'-d',BUILD/'classes',*sources)
     with zipfile.ZipFile(BUILD/'classes.jar','w',zipfile.ZIP_DEFLATED) as z:
@@ -98,6 +130,8 @@ def main():
         for entry in source.infolist():dest.writestr(entry,source.read(entry.filename))
         for dex in (BUILD/'dex').glob('*.dex'):dest.write(dex,dex.name)
         for name,data in native_files.items():dest.writestr(name,data)
+        for name,data in apk_resources.items():
+            dest.writestr(zipfile.ZipInfo(name),data,compress_type=zipfile.ZIP_STORED)
     run(exe(SDK,'zipalign'),'-f','4',BUILD/'unsigned.apk',BUILD/'aligned.apk')
     release_mode = os.environ.get('MARCOMOVIE_RELEASE', '') == '1' or 'MARCOMOVIE_SIGNING_KEY' in os.environ
     key=Path(os.environ.get('MARCOMOVIE_SIGNING_KEY',str(ROOT/'android/private/development.p12')));key.parent.mkdir(parents=True,exist_ok=True)
@@ -130,11 +164,13 @@ def main():
     mobile_manifest=BUILD/'AndroidManifest.mobile.xml'
     mobile_xml=(SRC/'AndroidManifest.xml').read_text(encoding='utf-8').replace('android:value="tv"','android:value="mobile"').replace('<category android:name="android.intent.category.LEANBACK_LAUNCHER" />','')
     mobile_manifest.write_text(mobile_xml,encoding='utf-8')
-    run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources-mobile.apk','--manifest',mobile_manifest,'-I',ANDROID,'-A',SRC/'assets','-A',catpaw_assets,'--auto-add-overlay',*extra,*overlays,'-R',BUILD/'resources.zip')
+    run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources-mobile.apk','--manifest',mobile_manifest,'-I',ANDROID,'-A',SRC/'assets','-A',catpaw_assets,'--auto-add-overlay','-0','onnx',*extra,*overlays,'-R',BUILD/'resources.zip')
     with zipfile.ZipFile(BUILD/'resources-mobile.apk') as source, zipfile.ZipFile(BUILD/'unsigned-mobile.apk','w',zipfile.ZIP_DEFLATED) as dest:
         for entry in source.infolist():dest.writestr(entry,source.read(entry.filename))
         for dex in (BUILD/'dex').glob('*.dex'):dest.write(dex,dex.name)
         for name,data in native_files_mobile.items():dest.writestr(name,data)
+        for name,data in apk_resources.items():
+            dest.writestr(zipfile.ZipInfo(name),data,compress_type=zipfile.ZIP_STORED)
     run(exe(SDK,'zipalign'),'-f','4',BUILD/'unsigned-mobile.apk',BUILD/'aligned-mobile.apk')
     mobile_apk=DIST/f'MarcoMovie-{version}-mobile.apk'
     run(exe(JDK/'bin','java'),'-jar',SDK/'lib/apksigner.jar','sign','--ks',key,'--ks-key-alias','marcomovie','--ks-pass','env:MARCOMOVIE_KEY_PASSWORD','--out',mobile_apk,BUILD/'aligned-mobile.apk')

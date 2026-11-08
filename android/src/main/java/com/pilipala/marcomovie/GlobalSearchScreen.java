@@ -793,7 +793,7 @@ public final class GlobalSearchScreen implements AutoCloseable {
                         !query.matches("[A-Za-z0-9' -]+")
                                 || a.phonetic == null
                                 || a.phonetic.matches(title, query),
-                term -> Cms.listing(a.engine(site).search(term, 1)).videos);
+                term -> Cms.listing(a.engine(site).search(term, 1), site).videos);
     }
 
     void retrySelected() {

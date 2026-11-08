@@ -233,6 +233,14 @@ public final class LiveCatalog {
                 throw new IOException("此地址返回 HLS 播放清单，不是直播频道目录");
             parseText(text, out, inheritedHeaders);
         }
+        // 内容安全：按频道名 + 分组隐藏成人频道，解析阶段一次过滤，所有直播入口共用
+        for (Group g : out.groups) {
+            java.util.Iterator<Channel> it = g.channels.iterator();
+            while (it.hasNext()) {
+                Channel c = it.next();
+                if (Safety.hideChannel(c.name, g.name)) it.remove();
+            }
+        }
         if (out.channelCount() == 0) throw new IOException("直播列表没有可识别的频道");
         return out;
     }
