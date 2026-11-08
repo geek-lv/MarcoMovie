@@ -30,6 +30,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
+import com.pilipala.marcomovie.adskip.AdSkipConfig;
+import com.pilipala.marcomovie.safety.ContentFilterConfig;
+import com.pilipala.marcomovie.safety.ContentGate;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -2434,7 +2437,11 @@ final class MobileShell {
                             ? "片源与直播配置"
                             : settingsSubPage == 2
                                     ? "播放、解码与字幕"
-                                    : settingsSubPage == 3 ? "界面外观与偏好" : "备份、更新与诊断";
+                                    : settingsSubPage == 3
+                                            ? "界面外观与偏好"
+                                            : settingsSubPage == 6
+                                                    ? "智能跳过与内容安全"
+                                                    : "备份、更新与诊断";
             TextView subTitle = a.text(subTitleText, 20, Color.WHITE);
             subTitle.setTypeface(null, Typeface.BOLD);
             topNav.addView(subTitle, new LinearLayout.LayoutParams(0, -2, 1));
@@ -2622,7 +2629,7 @@ final class MobileShell {
                             cachedSearchHits.clear();
                             a.toast("已清空搜索历史记录");
                         });
-            } else {
+            } else if (settingsSubPage == 4) {
                 addSectionHeader(body, "更新、备份与诊断");
                 addSettingCard(
                         body,
@@ -2647,6 +2654,37 @@ final class MobileShell {
                         () ->
                                 a.open(
                                         new MainActivity.Screen(() -> new SettingsScreen(a).show()),
+                                        true));
+            } else if (settingsSubPage == 6) {
+                addSectionHeader(body, "智能跳过与内容安全");
+                final boolean adOn = AdSkipConfig.isEnabled();
+                addSettingCard(
+                        body,
+                        6,
+                        "口播广告跳过",
+                        adOn
+                                ? ("开启 · "
+                                        + AdSkipConfig.getKeywordCount()
+                                        + " 个关键词 · 跳 "
+                                        + AdSkipConfig.getSkipSeconds()
+                                        + " 秒")
+                                : "已关闭",
+                        () ->
+                                a.open(
+                                        new MainActivity.Screen(
+                                                () -> new SettingsScreen(a).adSkip()),
+                                        true));
+                addSettingCard(
+                        body,
+                        6,
+                        "内容安全（成人资源过滤）",
+                        ContentGate.locked()
+                                ? "过滤开启"
+                                : (ContentFilterConfig.unlocked() ? "临时解锁中" : "过滤关闭"),
+                        () ->
+                                a.open(
+                                        new MainActivity.Screen(
+                                                () -> new SettingsScreen(a).contentSafety()),
                                         true));
             }
             if (savedScrollY > 0) {
@@ -2679,6 +2717,16 @@ final class MobileShell {
                     });
         }
         addSettingCard(body, 2, "网盘与账号授权", "", () -> AccountPanel.show(a, null));
+        addSettingCard(
+                body,
+                6,
+                "智能跳过与内容安全",
+                "口播广告自动跳过 · 成人资源过滤",
+                () -> {
+                    settingsSubPage = 6;
+                    sv.scrollTo(0, 0);
+                    refreshInPlace.run();
+                });
     }
 
     private void addSectionHeader(LinearLayout parent, String title) {
@@ -2756,6 +2804,10 @@ final class MobileShell {
                     badgeBg = 0x26bf5af2;
                     strokeColor = 0xffc084fc;
                     break;
+                case 6:
+                    badgeBg = 0x26ef4444;
+                    strokeColor = 0xfff87171;
+                    break;
                 default:
                     badgeBg = 0x265ac8fa;
                     strokeColor = 0xff60a5fa;
@@ -2810,6 +2862,22 @@ final class MobileShell {
                 paint.setStyle(Paint.Style.FILL);
                 c.drawCircle(cx - a.dp(3f), cy - a.dp(5f), a.dp(2.3f), paint);
                 c.drawCircle(cx + a.dp(3f), cy + a.dp(5f), a.dp(2.3f), paint);
+            } else if (kind == 6) {
+                // Shield with inner forward-skip double chevron
+                Path shield = new Path();
+                float stop = a.dp(7f);
+                float sbot = h - a.dp(7f);
+                shield.moveTo(cx, stop);
+                shield.lineTo(w - a.dp(9f), cy - a.dp(4f));
+                shield.lineTo(cx, sbot);
+                shield.lineTo(a.dp(9f), cy - a.dp(4f));
+                shield.close();
+                c.drawPath(shield, paint);
+                float iy = cy + a.dp(0.5f);
+                c.drawLine(cx - a.dp(4f), iy - a.dp(3f), cx - a.dp(1f), iy, paint);
+                c.drawLine(cx - a.dp(4f), iy + a.dp(3f), cx - a.dp(1f), iy, paint);
+                c.drawLine(cx + a.dp(0.5f), iy - a.dp(3f), cx + a.dp(3.5f), iy, paint);
+                c.drawLine(cx + a.dp(0.5f), iy + a.dp(3f), cx + a.dp(3.5f), iy, paint);
             } else {
                 // Shield / update arrow icon
                 c.drawArc(
