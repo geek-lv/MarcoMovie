@@ -791,6 +791,9 @@ final class MobileShell {
             body.addView(histScroll, new LinearLayout.LayoutParams(-1, -2));
         }
 
+        // 2.5 豆瓣热播榜货架（独立于当前片源，解决片源无电视剧/片单不跟热播的问题）
+        DoubanHot.attach(a, body);
+
         // 3. Featured Hero Showcase Card Container ("今日首推")
         final FrameLayout heroContainer = new FrameLayout(a);
         heroContainer.setPadding(a.dp(16), a.dp(14), a.dp(16), 0);
