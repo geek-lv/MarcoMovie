@@ -9,6 +9,8 @@ import android.view.View;
 import android.widget.*;
 import com.pilipala.marcomovie.adskip.AdSkipConfig;
 import com.pilipala.marcomovie.adskip.AdSkipController;
+import com.pilipala.marcomovie.adblur.AdBlurConfig;
+import com.pilipala.marcomovie.adblur.AdBlurTemplates;
 import com.pilipala.marcomovie.safety.AdultSourceStats;
 import com.pilipala.marcomovie.safety.ContentFilterConfig;
 import com.pilipala.marcomovie.safety.ContentGate;
@@ -117,6 +119,13 @@ final class SettingsScreen {
                         : "已关闭",
                 "settings-adskip",
                 () -> open(this::adSkip));
+        link(
+                "视频牛皮癣模糊",
+                AdBlurConfig.isEnabled()
+                        ? ("开启 · " + AdBlurTemplates.count(a) + " 个特征图")
+                        : "已关闭",
+                "settings-adblur",
+                () -> open(this::adBlur));
         link(
                 "NSFW 内容过滤",
                 ContentGate.locked()
@@ -257,6 +266,207 @@ final class SettingsScreen {
                         })
                 .setNegativeButton("取消", null)
                 .show();
+    }
+
+    // ------------------------------------------------------------ 视频牛皮癣模糊
+
+    void adBlur() {
+        page(
+                "视频牛皮癣模糊",
+                "识别画面里的二维码 / 贴片水印，把那块区域实时模糊成毛玻璃：广告出现即模糊、消失即恢复清晰。"
+                        + "特征图由你播放时框选保存，仅本机离线 GPU 匹配，不联网。仅在 Media3 播放器下生效；"
+                        + "开启后会启用 GL 合成，HDR 透传可能降级。");
+        adBlurToggle(
+                "功能总开关",
+                AdBlurConfig.isEnabled(),
+                v -> {
+                    AdBlurConfig.setEnabled(v);
+                    a.refresh();
+                });
+        if (AdBlurConfig.isEnabled()) {
+            adBlurInts(
+                    "模糊强度",
+                    new String[] {"轻 · 10px", "标准 · 18px", "强 · 28px", "很强 · 40px"},
+                    new int[] {10, 18, 28, 40},
+                    AdBlurConfig.getBlurRadius(),
+                    v -> {
+                        AdBlurConfig.setBlurRadius(v);
+                        a.refresh();
+                    });
+            adBlurInts(
+                    "检测频率",
+                    new String[] {"每 2 帧 · 灵敏", "每 6 帧 · 均衡", "每 12 帧 · 省电"},
+                    new int[] {2, 6, 12},
+                    AdBlurConfig.getDetectEveryN(),
+                    v -> {
+                        AdBlurConfig.setDetectEveryN(v);
+                        a.refresh();
+                    });
+            link(
+                    "已保存特征图",
+                    AdBlurTemplates.count(a) + " 个 · 点击管理 / 删除",
+                    "adblur-templates",
+                    () -> open(this::adBlurTemplates));
+            if (!a.isTvDevice()) {
+                link(
+                        "采集当前画面特征图",
+                        "在播放中框选广告区域，保存为模板",
+                        "adblur-capture",
+                        this::startCapture);
+            }
+        }
+        if (a.isTvDevice()) {
+            link(
+                    "电视同步码",
+                    "展示二维码，手机扫码把配置推送到本机",
+                    "adblur-tv-qr",
+                    () -> a.startActivity(new Intent(a, SyncQrActivity.class)));
+        } else {
+            link(
+                    "同步到电视",
+                    "扫描电视上的二维码，把全部设置推过去",
+                    "adblur-sync-tv",
+                    () -> a.startActivity(new Intent(a, SyncScanActivity.class)));
+        }
+        link(
+                "恢复默认设置",
+                "关闭开关 · 模糊 18px · 每 6 帧",
+                "adblur-reset",
+                () ->
+                        confirm(
+                                "恢复牛皮癣模糊默认设置？",
+                                () -> {
+                                    resetAdBlurDefaults();
+                                    a.refresh();
+                                }));
+    }
+
+    void adBlurToggle(
+            String title, boolean initial, java.util.function.Consumer<Boolean> onChange) {
+        boolean tv = a.isTvDevice();
+        LinearLayout row = a.row();
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(a.dp(20), a.dp(15), a.dp(20), a.dp(15));
+        MobileShell.SettingIconView icon =
+                new MobileShell.SettingIconView(
+                        a, MobileShell.SettingIconView.kindForSetting("adblur", title));
+        LinearLayout.LayoutParams iconLp = new LinearLayout.LayoutParams(a.dp(38), a.dp(38));
+        iconLp.rightMargin = a.dp(14);
+        row.addView(icon, iconLp);
+        LinearLayout copy = a.vertical();
+        copy.addView(a.text(title, 17, MainActivity.WHITE));
+        final TextView caption = a.text(initial ? "开启" : "关闭", 12, MainActivity.MUTED);
+        caption.setPadding(0, a.dp(4), 0, 0);
+        copy.addView(caption);
+        row.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
+        final MobileShell.IosSwitchView sw = new MobileShell.IosSwitchView(a, initial);
+        LinearLayout.LayoutParams switchLp = new LinearLayout.LayoutParams(a.dp(50), a.dp(30));
+        switchLp.leftMargin = a.dp(12);
+        row.addView(sw, switchLp);
+        row.setFocusable(tv);
+        row.setFocusableInTouchMode(tv);
+        row.setClickable(true);
+        row.setBackground(a.bg(0xff222226, 14));
+        row.setOnFocusChangeListener(
+                (v, f) ->
+                        FocusMotion.style(
+                                a, row, f, 0xff222226, 0xff37373e, 14, MainActivity.WHITE,
+                                MainActivity.WHITE, true, 1.008f));
+        if (tv) a.pressFeedback(row);
+        else MobileShell.bindCardTouchFeedback(a, row, a.bg(0xff222226, 14), a.bg(0xff303038, 14));
+        final boolean[] state = {initial};
+        row.setOnClickListener(
+                v -> {
+                    state[0] = !state[0];
+                    sw.setChecked(state[0], !a.reduced);
+                    caption.setText(state[0] ? "开启" : "关闭");
+                    onChange.accept(state[0]);
+                });
+        LinearLayout.LayoutParams size = new LinearLayout.LayoutParams(-1, -2);
+        size.bottomMargin = a.dp(14);
+        a.body.addView(row, size);
+    }
+
+    void adBlurInts(
+            String title,
+            String[] labels,
+            int[] values,
+            int current,
+            java.util.function.Consumer<Integer> onChange) {
+        int selected = 0;
+        for (int i = 0; i < values.length; i++) if (current == values[i]) selected = i;
+        final int choice = selected;
+        link(
+                title,
+                labels[selected],
+                "adblur-" + title,
+                () -> {
+                    if (!a.isTvDevice()) {
+                        MobileShell.showDrawerPicker(
+                                a, title, "在下方抽屉中选择预设选项", labels, choice, index -> onChange.accept(values[index]));
+                        return;
+                    }
+                    new AppDialog.Builder(a)
+                            .setTitle(title)
+                            .setSingleChoiceItems(
+                                    labels,
+                                    choice,
+                                    (dialog, index) -> {
+                                        onChange.accept(values[index]);
+                                        dialog.dismiss();
+                                    })
+                            .setNegativeButton("取消", null)
+                            .show();
+                });
+    }
+
+    void startCapture() {
+        if (AdBlurTemplates.count(a) >= 8) {
+            a.toast("特征图已达上限（8 个），请先删除后再采集");
+            return;
+        }
+        AdBlurController.get(a)
+                .setCaptureListener(
+                        bmp -> {
+                            TemplateCaptureActivity.pending = bmp;
+                            a.startActivity(new Intent(a, TemplateCaptureActivity.class));
+                        });
+        AdBlurController.get(a).requestCapture();
+        a.toast("正在截取当前播放画面…（请保持视频正在播放）");
+    }
+
+    void adBlurTemplates() {
+        page("已保存特征图", "这些模板用于匹配画面里的牛皮癣。点击可删除；删除后该模板不再参与模糊。");
+        java.util.List<String> names = AdBlurTemplates.list(a);
+        if (names.isEmpty()) {
+            a.paragraph("暂无特征图。返回上级，点「采集当前画面特征图」来创建第一个模板。");
+            return;
+        }
+        for (final String name : names) {
+            link(
+                    name,
+                    "删除此特征图",
+                    "adblur-tpl-" + name,
+                    () ->
+                            confirm(
+                                    "删除特征图「" + name + "」？",
+                                    () -> {
+                                        AdBlurTemplates.delete(a, name);
+                                        AdBlurController.get(a).notifyTemplatesChanged();
+                                        a.refresh();
+                                    }));
+        }
+    }
+
+    void resetAdBlurDefaults() {
+        AdBlurConfig.setEnabled(false);
+        AdBlurConfig.setBlurRadius(AdBlurConfig.DEFAULT_BLUR_RADIUS);
+        AdBlurConfig.setDetectEveryN(AdBlurConfig.DEFAULT_DETECT_EVERY_N);
+        AdBlurConfig.setMatchThreshold(AdBlurConfig.DEFAULT_MATCH_THRESHOLD);
+        AdBlurConfig.setScaleMax(AdBlurConfig.DEFAULT_SCALE_MAX);
+        AdBlurConfig.setFeather(AdBlurConfig.DEFAULT_FEATHER);
+        AdBlurConfig.setUseZxing(AdBlurConfig.DEFAULT_USE_ZXING);
+        AdBlurController.get(a).notifyTemplatesChanged();
     }
 
     // ------------------------------------------------------------ 内容安全

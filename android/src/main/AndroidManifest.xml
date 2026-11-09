@@ -9,6 +9,8 @@
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
   <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
   <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+  <!-- 手机端扫码同步到电视所需；TV 端不申请相机，仅作为接收方 -->
+  <uses-permission android:name="android.permission.CAMERA" />
   <uses-feature android:name="android.software.leanback" android:required="false" />
   <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
   <application android:label="Marco Movie" android:theme="@style/AppTheme" android:icon="@mipmap/ic_launcher" android:banner="@drawable/app_banner" android:allowBackup="false" android:requestLegacyExternalStorage="true" android:usesCleartextTraffic="true" android:hardwareAccelerated="true" android:largeHeap="true">
@@ -21,5 +23,11 @@
         <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
       </intent-filter>
     </activity>
+    <!-- 牛皮癣特征图采集：播放中截图后矩形框选保存 -->
+    <activity android:name=".TemplateCaptureActivity" android:exported="false" android:screenOrientation="unspecified" android:configChanges="keyboardHidden|orientation|screenSize" />
+    <!-- 电视端同步码：展示二维码，接收手机推送的配置 -->
+    <activity android:name=".SyncQrActivity" android:exported="false" android:screenOrientation="unspecified" android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|screenLayout" />
+    <!-- 手机端同步到电视：扫描电视二维码并推送本地配置 -->
+    <activity android:name=".SyncScanActivity" android:exported="false" android:screenOrientation="unspecified" android:configChanges="keyboardHidden|orientation|screenSize" />
   </application>
 </manifest>

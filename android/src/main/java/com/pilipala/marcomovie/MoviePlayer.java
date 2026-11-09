@@ -17,6 +17,9 @@ import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.effect.GlEffect;
+import com.pilipala.marcomovie.adblur.AdBlurController;
+import com.pilipala.marcomovie.adblur.AdBlurTemplates;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -203,6 +206,7 @@ public class MoviePlayer {
                                                     .build())
                                     .setLooper(Looper.getMainLooper())
                                     .build();
+                    applyAdBlurEffect();
                     androidx.media3.exoplayer.trackselection.DefaultTrackSelector.Parameters.Builder
                             trackParams =
                                     new androidx.media3.exoplayer.trackselection
@@ -520,6 +524,23 @@ public class MoviePlayer {
             }
         }
         return out;
+    }
+
+    /**
+     * 把「牛皮癣模糊」后处理特效挂到播放器。应在 {@code exo.build()} 之后、{@code prepare()} 之前调用。
+     *
+     * <p>只要有特征图就挂载特效：特效内部会实时读取 {@code AdBlurConfig.isEnabled()} 与模板目录，
+     * 实现「开关 / 增删特征图」免重配置生效；无特征图时不挂载，零开销。
+     */
+    private void applyAdBlurEffect() {
+        if (exo == null) return;
+        if (AdBlurTemplates.count(context) > 0) {
+            AdBlurController.get(context).setOnReload(this::applyAdBlurEffect);
+            Object fx = AdBlurController.get(context).buildEffect();
+            exo.setVideoEffects(Collections.singletonList((GlEffect) fx));
+        } else {
+            exo.setVideoEffects(Collections.emptyList());
+        }
     }
 
     public void prepareAsync() {

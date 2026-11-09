@@ -148,8 +148,16 @@
     "group": "androidx.media3",
     "version": "1.5.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-datasource/1.5.1/media3-datasource-1.5.1.aar",
-    "sha256": "b86cfb137a94bf471d6b2802415edd4fe66038dab6986682133786ca7dd43de2"
+      "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-datasource/1.5.1/media3-datasource-1.5.1.aar",
+      "sha256": "b86cfb137a94bf471d6b2802415edd4fe66038dab6986682133786ca7dd43de2"
+  },
+  {
+    "name": "media3-effect",
+    "group": "androidx.media3",
+    "version": "1.5.1",
+    "license": "The Apache Software License, Version 2.0",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-effect/1.5.1/media3-effect-1.5.1.aar",
+    "sha256": "29ca94492cc7ae86b7817da3449e2c29504cd7fdd410a8603b74098260291955"
   },
   {
     "name": "media3-decoder",
