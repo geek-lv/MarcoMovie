@@ -3588,7 +3588,8 @@ final class MobileShell {
                                         + AdSkipConfig.getKeywordCount()
                                         + " 个关键词 · 跳 "
                                         + AdSkipConfig.getSkipSeconds()
-                                        + " 秒")
+                                        + " 秒 · "
+                                        + AdSkipConfig.getSensitivityLabel())
                                 : "已关闭",
                         () ->
                                 a.open(

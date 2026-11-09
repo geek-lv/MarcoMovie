@@ -25,6 +25,11 @@ public class SherpaKwsEngine implements KwsEngine {
     private OnlineStream stream;
     private volatile boolean ready = false;
 
+    /** 建 spotter 时用的上下文，换灵敏度档位需要整只重建，故留一份 */
+    private volatile Context appContext;
+    /** 当前 spotter 实际生效的灵敏度档位，-1 表示未知/未建 */
+    private volatile int appliedSensitivity = Integer.MIN_VALUE;
+
     private SherpaKwsEngine() {
     }
 
@@ -41,6 +46,7 @@ public class SherpaKwsEngine implements KwsEngine {
 
     /** 懒加载模型，重复调用无副作用 */
     public synchronized void init(Context context) {
+        if (context != null) appContext = context.getApplicationContext();
         if (spotter != null && ready) return;
         try {
             FeatureConfig featConfig = new FeatureConfig();
@@ -71,10 +77,10 @@ public class SherpaKwsEngine implements KwsEngine {
             // - score=6.0 起行为失衡（连纯口播都漏），score=8.0 出现无中生有的误报
             // - blanks=5 全面变差，2 最佳
             // 该 3.3M 小模型在口播叠人声场景召回上限约 60%，真实口播（音量占优）会好于合成最坏情况
-            config.keywordsScore = 4.0f;
-            config.keywordsThreshold = 0.10f;
-            config.numTrailingBlanks = 2;
-            config.maxActivePaths = 8;
+            // 2026-11-09 真机补充：词尾 blanks 是「连续口播」漏检的主因 —— 广告词
+            // 「别再羡慕别人暴富」后紧接「澳门新葡京」，中间无停顿，blanks=2 时判定不了词尾。
+            // 故抽出三档让用户按广告形态选，默认「灵敏」= blanks 1 + th 0.06 + paths 16。
+            applySensitivityPreset(config);
 
             spotter = new KeywordSpotter(context.getApplicationContext().getAssets(), config);
             ready = spotter.isValid();
@@ -85,11 +91,85 @@ public class SherpaKwsEngine implements KwsEngine {
         }
     }
 
+    /** 把当前灵敏度档位翻译成引擎参数。参数只能在构造 spotter 时生效，改档必须重建。 */
+    private void applySensitivityPreset(KeywordSpotterConfig config) {
+        int level = AdSkipConfig.getSensitivity();
+        float score;
+        float threshold;
+        int blanks;
+        int paths;
+        if (level <= 0) {
+            // 标准：词尾必须落静音，误报最低
+            score = 3.5f;
+            threshold = 0.10f;
+            blanks = 2;
+            paths = 8;
+        } else if (level == 1) {
+            // 灵敏（默认）：词尾只要求 1 帧静音，连续说话也能判定；并行路径翻倍提升弱口播召回
+            score = 4.5f;
+            threshold = 0.06f;
+            blanks = 1;
+            paths = 16;
+        } else {
+            // 极敏：阈值再压一档、并行路径拉到 24。
+            // 注意 blanks 不降到 0 —— native 侧对 0 的行为未验证，避免为了一点召回引入崩溃风险
+            score = 5.0f;
+            threshold = 0.04f;
+            blanks = 1;
+            paths = 24;
+        }
+        config.keywordsScore = score;
+        config.keywordsThreshold = threshold;
+        config.numTrailingBlanks = blanks;
+        config.maxActivePaths = paths;
+        appliedSensitivity = level;
+        android.util.Log.i(
+                "AdSkip",
+                "灵敏度=" + AdSkipConfig.SENSITIVITY_LABELS[level]
+                        + " score=" + score + " th=" + threshold
+                        + " blanks=" + blanks + " paths=" + paths);
+    }
+
+    /**
+     * 档位变了就重建 spotter。返回 true 表示确实重建过。
+     * 关键词变更走 {@link #applyKeywords()}，它会先调本方法。
+     */
+    public synchronized boolean ensureSensitivity() {
+        int level = AdSkipConfig.getSensitivity();
+        if (spotter != null && ready && appliedSensitivity == level) return false;
+        Context ctx = appContext;
+        if (ctx == null) return false;
+        releaseSpotter();
+        init(ctx);
+        return true;
+    }
+
+    /** 只释放 native 资源，不动上下文，便于原参数重建 */
+    private void releaseSpotter() {
+        if (stream != null) {
+            try {
+                stream.release();
+            } catch (Throwable ignored) {
+            }
+            stream = null;
+        }
+        if (spotter != null) {
+            try {
+                spotter.release();
+            } catch (Throwable ignored) {
+            }
+            spotter = null;
+        }
+        ready = false;
+    }
+
     /**
      * 用当前配置里的关键词重建识别流。引擎本体不动，因此成本很低。
      * 关键词为空或转换失败时流会被置空，{@link #isReady()} 返回 false。
      */
     public synchronized void applyKeywords() {
+        // 灵敏度档位变了要先重建 spotter（构造期参数），否则改档不生效
+        ensureSensitivity();
         applyKeywordsParam(KeywordPhonemeConverter.toKeywordsParam(AdSkipConfig.getKeywordList()));
     }
 
