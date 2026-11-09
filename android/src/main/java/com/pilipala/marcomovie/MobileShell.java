@@ -2324,7 +2324,7 @@ final class MobileShell {
                                     : settingsSubPage == 3
                                             ? "界面外观与偏好"
                                             : settingsSubPage == 6
-                                                    ? "智能跳过与内容安全"
+                                                    ? "智能跳过与内容过滤"
                                                     : "备份、更新与诊断";
             TextView subTitle = a.text(subTitleText, 20, Color.WHITE);
             subTitle.setTypeface(null, Typeface.BOLD);
@@ -2540,7 +2540,7 @@ final class MobileShell {
                                         new MainActivity.Screen(() -> new SettingsScreen(a).show()),
                                         true));
             } else if (settingsSubPage == 6) {
-                addSectionHeader(body, "智能跳过与内容安全");
+                addSectionHeader(body, "智能跳过与内容过滤");
                 final boolean adOn = AdSkipConfig.isEnabled();
                 addSettingCard(
                         body,
@@ -2562,7 +2562,7 @@ final class MobileShell {
                 addSettingCard(
                         body,
                         6,
-                        "内容安全（成人资源过滤）",
+                        "NSFW 内容过滤",
                         ContentGate.locked()
                                 ? "过滤开启"
                                 : (ContentFilterConfig.unlocked() ? "临时解锁中" : "过滤关闭"),
@@ -2605,8 +2605,8 @@ final class MobileShell {
         addSettingCard(
                 body,
                 6,
-                "智能跳过与内容安全",
-                "口播广告自动跳过 · 成人资源过滤",
+                "智能跳过与内容过滤",
+                "口播广告自动跳过 · NSFW 内容过滤",
                 () -> {
                     settingsSubPage = 6;
                     sv.scrollTo(0, 0);
