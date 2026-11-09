@@ -394,6 +394,45 @@ final class ImageLoader {
         }
     }
 
+    /** 单次下载（含来源请求头、emby 头、超时与体积上限），连接在方法内必定关闭。 */
+    private static byte[] readBytes(
+            MainActivity a, String url, Cms.ImageRequest source, boolean detail) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            for (Map.Entry<String, String> header : source.headers.entrySet())
+                connection.setRequestProperty(header.getKey(), header.getValue());
+            String fragment = new URL(url).getRef();
+            if (fragment != null && fragment.startsWith("mm-emby=")) {
+                connection.setInstanceFollowRedirects(false);
+                com.pilipala.emby.EmbyLibrary library =
+                        com.pilipala.emby.EmbyAccounts.open(
+                                a, "emby://account/" + fragment.substring(8));
+                for (Map.Entry<String, String> h : library.imageHeaders(url).entrySet())
+                    connection.setRequestProperty(h.getKey(), h.getValue());
+            }
+            connection.setConnectTimeout(7000);
+            connection.setReadTimeout(8000);
+            if (!source.headers.containsKey("User-Agent"))
+                connection.setRequestProperty("User-Agent", Cms.USER_AGENT);
+            RequestScope.attach(connection);
+            try (InputStream in = connection.getInputStream()) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int n;
+                while ((n = in.read(buffer)) != -1) {
+                    RequestScope.current().check();
+                    if (out.size() + n > (detail ? 8 : 3) * 1024 * 1024)
+                        throw new IOException("Poster too large");
+                    out.write(buffer, 0, n);
+                }
+                return out.toByteArray();
+            }
+        } finally {
+            RequestScope.detach(connection);
+            connection.disconnect();
+        }
+    }
+
     static View createAtmosphere(MainActivity a) {
         return new Atmosphere(a);
     }
