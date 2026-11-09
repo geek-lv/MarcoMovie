@@ -82,6 +82,36 @@ final class DecoderRenderersFactory extends DefaultRenderersFactory {
         return toBaseLayerFormat(format);
     }
 
+    /**
+     * 在音频输出链上挂一个旁路 PCM 探针（移植自片刻/TVBoxOSC 的口播识别挂载方式）。
+     *
+     * <p>探针只做旁路拷贝（降混单声道 + 16kHz 重采样），不改变任何音频输出；
+     * 引擎未初始化或功能未开启时状态机自行空转，音频链路不受影响。
+     * 挂载失败时回退默认音频链路，绝不影响正常播放。
+     */
+    @Override
+    protected androidx.media3.exoplayer.audio.AudioSink buildAudioSink(
+            Context context,
+            boolean enableFloatOutput,
+            boolean enableAudioTrackPlaybackParams) {
+        try {
+            androidx.media3.common.audio.AudioProcessor tap =
+                    com.pilipala.marcomovie.adskip.AdSkipController.get().createTapProcessor();
+            if (tap != null) {
+                return new androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                        .setEnableFloatOutput(enableFloatOutput)
+                        .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                        .setAudioProcessorChain(
+                                new androidx.media3.exoplayer.audio.DefaultAudioSink
+                                        .DefaultAudioProcessorChain(tap))
+                        .build();
+            }
+        } catch (Throwable t) {
+            android.util.Log.w("AdSkip", "buildAudioSink: 探针挂载失败，回退默认音频链路", t);
+        }
+        return super.buildAudioSink(context, enableFloatOutput, enableAudioTrackPlaybackParams);
+    }
+
     @Override
     protected void buildVideoRenderers(
             Context context,

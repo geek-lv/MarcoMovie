@@ -766,6 +766,8 @@ final class PlaybackController {
         }
         a.prepared = false;
         a.playing = false;
+        // 换集 / 换源：清空每集识别状态，模型保持加载
+        com.pilipala.marcomovie.adskip.AdSkipController.get().onEpisodeChange();
         if (a.playerChrome != null) {
             a.playerChrome.switchEpisode(episode, line);
         }
@@ -1060,6 +1062,9 @@ final class PlaybackController {
                                                             mp -> {
                                                                 if (ticket != a.generation) return;
                                                                 a.prepared = true;
+                                                                // 起播：锚定音频时钟。引擎若仍在后台加载，控制器会记住并在就绪后补做
+                                                                com.pilipala.marcomovie.adskip.AdSkipController.get()
+                                                                        .onPlaybackStart(mp.getCurrentPosition());
                                                                 if (a.playerChrome != null)
                                                                     a.playerChrome.setLoading(
                                                                             false);
@@ -1341,6 +1346,9 @@ final class PlaybackController {
     static void clock(MainActivity a, int ticket) {
         if (ticket != a.generation || a.player == null || !a.prepared) return;
         savePlaybackHistory(a, false);
+        // 每秒校正一次音频时钟：既能解除冷却，也能自动兜底所有未显式通知的 seek
+        com.pilipala.marcomovie.adskip.AdSkipController.get()
+                .onPositionUpdate(a.player.getCurrentPosition());
         try {
             if (a.embyReporter != null)
                 a.embyReporter.update(a.player.getCurrentPosition(), !a.player.isPlaying());

@@ -303,6 +303,11 @@ public final class MainActivity extends Activity {
     /** Opens a list card without leaving an invisible redirect page in the back stack. */
     void openListing(Cms.Site s, Cms.Video v) {
         if (v == null) return;
+        // 详情入口兜底：外部跳转 / 历史 / 收藏等不经过 Cms.listing 的路径也拦住
+        if (Safety.hideItem(v)) {
+            toast("该内容已被内容安全过滤");
+            return;
+        }
         if (v.action != null && !v.action.isEmpty()) {
             sourceAction(s, v.action);
             return;
@@ -536,6 +541,36 @@ public final class MainActivity extends Activity {
         prefs = getSharedPreferences(privateMode ? "movie-private" : Prefs.FILE, MODE_PRIVATE);
         reduced = prefs.getBoolean(Prefs.REDUCED, false);
         configOrigin = prefs.getString("origin", "");
+        // ---- 移植功能初始化 ----
+        // 内容过滤只读 SharedPreferences，主线程初始化即可；KWS 模型加载要数秒，必须放后台。
+        com.pilipala.marcomovie.safety.ContentFilterConfig.init(this);
+        com.pilipala.marcomovie.safety.AdultSourceStats.init(this);
+        final com.pilipala.marcomovie.adskip.AdSkipController adSkip =
+                com.pilipala.marcomovie.adskip.AdSkipController.get();
+        new Thread(() -> adSkip.init(MainActivity.this), "adskip-engine-init").start();
+        // 命中后回主线程 seek；播放器实例会随换集更换，因此每次动态取 player 字段。
+        adSkip.setSeekHandler(
+                new com.pilipala.marcomovie.adskip.AdSkipController.SeekHandler() {
+                    public void seekTo(long positionMs) {
+                        ui.post(
+                                () -> {
+                                    MoviePlayer p = player;
+                                    if (p != null && prepared)
+                                        p.seekToFromAdSkip((int) positionMs);
+                                });
+                    }
+
+                    public void onAdSkipped(long fromMs, long toMs, String keyword) {
+                        ui.post(
+                                () ->
+                                        toast(
+                                                "识别到口播「"
+                                                        + keyword
+                                                        + "」，跳过 "
+                                                        + (toMs - fromMs) / 1000
+                                                        + " 秒"));
+                    }
+                });
         try {
             ActivityManager am = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
             if (am != null) images.resize(ImageDecodePolicy.cacheBytes(am.getMemoryClass()));
@@ -668,9 +703,76 @@ public final class MainActivity extends Activity {
                 });
     }
 
+    /**
+     * 旋转/分屏引起的窗口尺寸变化，统一由 decorView 的布局回调驱动。
+     *
+     * <p>不能直接在这里读 root 的宽高：onConfigurationChanged 触发时窗口还没重新布局，
+     * root.getWidth() 仍是旋转前的尺寸，与缓存的 usableWidth 相等，判断就会漏掉这次翻转
+     * —— 表现就是「横屏后导航栏停靠右侧，转回竖屏不会回到底部」。
+     */
+    private boolean windowSizeWatcherAttached;
+    private boolean lastPortraitKnown;
+    private boolean lastPortraitLayout;
+
+    @Override
+    public void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        attachWindowSizeWatcher();
+    }
+
+    private void attachWindowSizeWatcher() {
+        if (windowSizeWatcherAttached) return;
+        Window w = getWindow();
+        View decor = w == null ? null : w.peekDecorView();
+        if (decor == null) return;
+        windowSizeWatcherAttached = true;
+        decor.addOnLayoutChangeListener(
+                (v, l, t, r, b, ol, ot, or, ob) -> onWindowSizeChanged(r - l, b - t));
+    }
+
+    private void onWindowSizeChanged(final int w, final int h) {
+        if (w <= 0 || h <= 0) return;
+        final int oldW = usableWidth, oldH = usableHeight;
+        usableWidth = w;
+        usableHeight = h;
+        final boolean portrait = TvLayoutPolicy.isPortrait(w, h);
+        if (!lastPortraitKnown) {
+            lastPortraitKnown = true;
+            lastPortraitLayout = portrait;
+            return;
+        }
+        if (portrait == lastPortraitLayout) {
+            // 同一方向下的窗口变化（分屏拖拽、缩放手势）也重新排版，但避免首帧抖动的微小差值
+            if (oldW > 0 && oldH > 0 && (Math.abs(oldW - w) > 16 || Math.abs(oldH - h) > 16))
+                scheduleOrientationRelayout();
+            return;
+        }
+        lastPortraitLayout = portrait;
+        scheduleOrientationRelayout();
+    }
+
+    private void scheduleOrientationRelayout() {
+        if (!layoutReady || root == null) return;
+        final View anchor = root;
+        anchor.post(
+                () -> {
+                    if (isFinishing() || isDestroyed() || root == null) return;
+                    if (current != null && current.player) {
+                        if (playerChrome != null) playerChrome.relayout();
+                        if (playbackControls != null)
+                            playbackControls.resize(
+                                    playbackControls.videoWidth, playbackControls.videoHeight);
+                    } else if (current != null) {
+                        // 整体重建：底部 Dock / 右侧导航栏、首页栅格列数都由方向决定
+                        refresh();
+                    }
+                });
+    }
+
     @Override
     public void onConfigurationChanged(android.content.res.Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
+        attachWindowSizeWatcher();
         if (!layoutReady || root == null) return;
         if (!isTvDevice() && usableWidth > 0 && usableHeight > 0 && newConfig != null) {
             boolean configPortrait =
@@ -723,7 +825,6 @@ public final class MainActivity extends Activity {
                         ui.post(this::syncRootDimensions);
                     }
                 });
-    }
 
     @Override
     protected void onSaveInstanceState(Bundle out) {
@@ -1648,6 +1749,10 @@ public final class MainActivity extends Activity {
                         });
         ui.removeCallbacks(automaticUpdate);
         ui.postDelayed(automaticUpdate, 4000);
+        // 回到前台后重新锚定音频时钟（后台期间没有 PCM 输入）
+        if (player != null && prepared)
+            com.pilipala.marcomovie.adskip.AdSkipController.get()
+                    .onPlaybackStart(player.getCurrentPosition());
     }
 
     @Override
@@ -1684,6 +1789,7 @@ public final class MainActivity extends Activity {
         if (startupIntro != null) startupIntro.cancel();
         introSkipKey = false;
         savePlaybackHistory(true);
+        com.pilipala.marcomovie.adskip.AdSkipController.get().onPaused();
         foreground = false;
         super.onStop();
         if (player != null)
@@ -1708,6 +1814,7 @@ public final class MainActivity extends Activity {
         stopMagnet();
         generation++;
         releasePlayer();
+        com.pilipala.marcomovie.adskip.AdSkipController.get().destroy();
         closeEngines();
         cancelArtwork();
         cancelPageRequests();

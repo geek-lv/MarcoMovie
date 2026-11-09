@@ -3,9 +3,15 @@ package com.pilipala.marcomovie;
 import android.content.Intent;
 import android.graphics.*;
 import android.net.Uri;
+import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.*;
+import com.pilipala.marcomovie.adskip.AdSkipConfig;
+import com.pilipala.marcomovie.adskip.AdSkipController;
+import com.pilipala.marcomovie.safety.AdultSourceStats;
+import com.pilipala.marcomovie.safety.ContentFilterConfig;
+import com.pilipala.marcomovie.safety.ContentGate;
 import java.io.*;
 
 /** Remote-friendly settings. Each row changes a setting consumed by the app. */
@@ -103,7 +109,350 @@ final class SettingsScreen {
         link("首页与壁纸", "", "settings-appearance", () -> open(this::appearance));
         link("播放与字幕", "", "settings-playback", () -> open(this::playback));
         link("搜索与数据", "", "settings-data", () -> open(this::data));
+        link(
+                "口播广告跳过",
+                AdSkipConfig.isEnabled()
+                        ? ("开启 · " + AdSkipConfig.getKeywordCount() + " 个关键词 · 跳 "
+                                + AdSkipConfig.getSkipSeconds() + " 秒")
+                        : "已关闭",
+                "settings-adskip",
+                () -> open(this::adSkip));
+        link(
+                "NSFW 内容过滤",
+                ContentGate.locked()
+                        ? "过滤开启"
+                        : (ContentFilterConfig.unlocked() ? "临时解锁中" : "过滤关闭"),
+                "settings-safety",
+                () -> open(this::contentSafety));
         link("软件更新", "", "settings-updates", () -> open(() -> new UpdateScreen(a).show()));
+    }
+
+    // ------------------------------------------------------------ 口播广告跳过
+
+    void adSkip() {
+        page(
+                "口播广告跳过",
+                "识别烧录在音轨里的口播广告并自动快进。全程本地离线识别（sherpa-onnx），不上传任何音频；仅在「Media3」播放器下生效。");
+        link(
+                "口播关键词",
+                AdSkipConfig.getKeywordCount() + " 个 · " + AdSkipConfig.getKeywordsRaw(),
+                "adskip-keywords",
+                this::editAdKeywords);
+        link(
+                "识别灵敏度",
+                AdSkipConfig.getSensitivityLabel()
+                        + " · "
+                        + AdSkipConfig.SENSITIVITY_HINTS[AdSkipConfig.getSensitivity()],
+                "adskip-sensitivity",
+                this::pickAdSensitivity);
+        link(
+                "命中后跳过时长",
+                AdSkipConfig.getSkipSeconds() == 0
+                        ? "关闭"
+                        : AdSkipConfig.getSkipSeconds() + " 秒",
+                "adskip-duration",
+                this::pickAdDuration);
+        link(
+                "引擎自检",
+                "查看模型 / 关键词 / 探针 / 状态机",
+                "adskip-diag",
+                () ->
+                        new AppDialog.Builder(a)
+                                .setTitle("口播引擎自检")
+                                .setMessage(
+                                        AdSkipController.get().diagnostics()
+                                                + "\n播放器："
+                                                + (a.prefs.getInt(Prefs.PLAYER_ENGINE, 0) == 1
+                                                        ? "系统播放器（探针不生效）"
+                                                        : "Media3（探针生效）"))
+                                .setPositiveButton("关闭", null)
+                                .show());
+        link(
+                "恢复默认设置",
+                AdSkipConfig.DEFAULT_KEYWORDS,
+                "adskip-reset",
+                () ->
+                        confirm(
+                                "恢复默认关键词与跳过时长？",
+                                () -> {
+                                    AdSkipConfig.setKeywordsRaw(AdSkipConfig.DEFAULT_KEYWORDS);
+                                    AdSkipConfig.setSkipSeconds(
+                                            AdSkipConfig.DEFAULT_SKIP_SECONDS);
+                                    AdSkipConfig.setSensitivity(AdSkipConfig.DEFAULT_SENSITIVITY);
+                                    AdSkipController.get().onConfigChanged(a);
+                                    a.refresh();
+                                }));
+    }
+
+    void editAdKeywords() {
+        final EditText input = new EditText(a);
+        input.setText(AdSkipConfig.getKeywordsRaw());
+        input.setHint("多个关键词用逗号分隔，如：澳门新葡京,打开APP领取");
+        input.setTextColor(MainActivity.WHITE);
+        input.setHintTextColor(MainActivity.MUTED);
+        input.setTextSize(15);
+        input.setMinLines(3);
+        input.setMaxLines(6);
+        input.setGravity(Gravity.TOP);
+        input.setPadding(a.dp(14), a.dp(10), a.dp(14), a.dp(10));
+        input.setBackground(a.bg(0xff36363e, 16));
+        new AppDialog.Builder(a)
+                .setTitle("口播关键词")
+                .setView(dialogBox(input, "清空关键词即关闭检测；修改后立即生效，无需重启。"))
+                .setNegativeButton("取消", null)
+                .setPositiveButton(
+                        "保存",
+                        (d, i) -> {
+                            AdSkipConfig.setKeywordsRaw(input.getText().toString());
+                            AdSkipController.get().onConfigChanged(a);
+                            a.toast("已保存 " + AdSkipConfig.getKeywordCount() + " 个关键词");
+                            a.refresh();
+                        })
+                .show();
+    }
+
+    void pickAdSensitivity() {
+        String[] labels = new String[AdSkipConfig.SENSITIVITY_LABELS.length];
+        for (int i = 0; i < labels.length; i++) {
+            labels[i] = AdSkipConfig.SENSITIVITY_LABELS[i] + " · " + AdSkipConfig.SENSITIVITY_HINTS[i];
+        }
+        new AppDialog.Builder(a)
+                .setTitle("识别灵敏度")
+                .setMessage(
+                        "口播之间没有停顿（例如「别再羡慕别人暴富」后面紧跟「澳门新葡京」）时，"
+                                + "标准档会因为等不到词尾静音而漏检，这时选「灵敏」或「极敏」。\n"
+                                + "档位越高越容易命中，也越可能把剧里台词误判成广告。")
+                .setSingleChoiceItems(
+                        labels,
+                        AdSkipConfig.getSensitivity(),
+                        (d, i) -> {
+                            AdSkipConfig.setSensitivity(i);
+                            AdSkipController.get().onConfigChanged(a);
+                            d.dismiss();
+                            a.refresh();
+                        })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    void pickAdDuration() {
+        final int[] values = {0, 10, 15, 20, 30, 45, 60, 90};
+        String[] labels = new String[values.length];
+        int checked = 0;
+        for (int i = 0; i < values.length; i++) {
+            labels[i] = values[i] == 0 ? "关闭检测" : values[i] + " 秒";
+            if (values[i] == AdSkipConfig.getSkipSeconds()) checked = i;
+        }
+        final int chosen = checked;
+        new AppDialog.Builder(a)
+                .setTitle("命中后跳过时长")
+                .setSingleChoiceItems(
+                        labels,
+                        chosen,
+                        (d, i) -> {
+                            AdSkipConfig.setSkipSeconds(values[i]);
+                            AdSkipController.get().onConfigChanged(a);
+                            d.dismiss();
+                            a.refresh();
+                        })
+                .setNegativeButton("取消", null)
+                .show();
+    }
+
+    // ------------------------------------------------------------ 内容安全
+
+    void contentSafety() {
+        page(
+                "NSFW 内容过滤",
+                "本地关键词 / 番号 / 来源画像过滤，不联网、不上传。判定为 NSFW 的条目、频道与整块来源结果在显示前就被丢弃。");
+        if (ContentFilterConfig.hasPin())
+            link(
+                    "儿童锁",
+                    ContentFilterConfig.unlocked()
+                            ? ("已临时解锁 · 剩余 "
+                                    + ContentFilterConfig.unlockMinutesLeft()
+                                    + " 分钟 · 点击重新锁定")
+                            : "已锁定 · 点击临时解锁",
+                    "safety-pin-gate",
+                    this::safetyPinGate);
+        link(
+                "内容过滤总开关",
+                ContentFilterConfig.enabled() ? "开启" : "关闭",
+                "safety-enabled",
+                () ->
+                        confirm(
+                                ContentFilterConfig.enabled()
+                                        ? "关闭内容过滤？"
+                                        : "开启内容过滤？",
+                                () -> {
+                                    ContentFilterConfig.setEnabled(
+                                            !ContentFilterConfig.enabled());
+                                    a.refresh();
+                                }));
+        link(
+                "额外过滤关键词",
+                ContentFilterConfig.extraKeywordCount() + " 个",
+                "safety-extra",
+                this::editExtraKeywords);
+        link(
+                "设置 / 修改 PIN",
+                ContentFilterConfig.hasPin() ? "已设置" : "未设置（无需 PIN 即可改设置）",
+                "safety-pin",
+                this::editPin);
+        link(
+                "已标记 NSFW 来源",
+                ContentFilterConfig.adultCount() + " 个 · 点击查看 / 解除",
+                "safety-marks",
+                () -> open(this::adultMarks));
+        link(
+                "清除所有来源标记",
+                "",
+                "safety-clear-marks",
+                () ->
+                        confirm(
+                                "清除全部 NSFW 来源标记？",
+                                () -> {
+                                    ContentFilterConfig.clearMarks();
+                                    AdultSourceStats.clearAll();
+                                    a.refresh();
+                                }));
+    }
+
+    void editExtraKeywords() {
+        final EditText input = new EditText(a);
+        input.setText(ContentFilterConfig.extraKeywordsRaw());
+        input.setHint("逗号分隔；这些词会追加到内置规则之外");
+        input.setTextColor(MainActivity.WHITE);
+        input.setHintTextColor(MainActivity.MUTED);
+        input.setTextSize(15);
+        input.setMinLines(2);
+        input.setMaxLines(5);
+        input.setGravity(Gravity.TOP);
+        input.setPadding(a.dp(14), a.dp(10), a.dp(14), a.dp(10));
+        input.setBackground(a.bg(0xff36363e, 16));
+        new AppDialog.Builder(a)
+                .setTitle("额外过滤关键词")
+                .setView(dialogBox(input, "留空表示只用内置规则。"))
+                .setNegativeButton("取消", null)
+                .setPositiveButton(
+                        "保存",
+                        (d, i) -> {
+                            ContentFilterConfig.setExtraKeywordsRaw(
+                                    input.getText().toString());
+                            a.toast(
+                                    "已保存 "
+                                            + ContentFilterConfig.extraKeywordCount()
+                                            + " 个关键词");
+                            a.refresh();
+                        })
+                .show();
+    }
+
+    void editPin() {
+        final EditText input = pinInput("新 PIN（4–6 位数字）");
+        AppDialog.Builder builder =
+                new AppDialog.Builder(a)
+                        .setTitle("儿童锁 PIN")
+                        .setView(
+                                dialogBox(
+                                        input,
+                                        "PIN 只在本机保存加盐摘要；临时解锁 30 分钟，重启应用自动恢复锁定。"))
+                        .setNegativeButton("取消", null)
+                        .setPositiveButton(
+                                "保存",
+                                (d, i) -> {
+                                    if (!ContentFilterConfig.setPin(
+                                            input.getText().toString())) {
+                                        a.toast("PIN 必须是 4–6 位数字");
+                                        return;
+                                    }
+                                    a.toast("PIN 已保存");
+                                    a.refresh();
+                                });
+        if (ContentFilterConfig.hasPin())
+            builder.setNeutralButton(
+                    "清除 PIN",
+                    (d, i) -> {
+                        ContentFilterConfig.clearPin();
+                        a.toast("PIN 已清除");
+                        a.refresh();
+                    });
+        builder.show();
+    }
+
+    void safetyPinGate() {
+        if (ContentFilterConfig.unlocked()) {
+            ContentFilterConfig.lock();
+            a.toast("已重新锁定");
+            a.refresh();
+            return;
+        }
+        final EditText input = pinInput("4–6 位数字 PIN");
+        new AppDialog.Builder(a)
+                .setTitle("临时解锁 30 分钟")
+                .setView(dialogBox(input, "解锁期间不做任何过滤，重启应用自动恢复。"))
+                .setNegativeButton("取消", null)
+                .setPositiveButton(
+                        "解锁",
+                        (d, i) -> {
+                            if (!ContentFilterConfig.verifyPin(input.getText().toString())) {
+                                a.toast("PIN 不正确");
+                                return;
+                            }
+                            ContentFilterConfig.unlock();
+                            a.toast("已临时解锁 30 分钟");
+                            a.refresh();
+                        })
+                .show();
+    }
+
+    void adultMarks() {
+        page("已标记 NSFW 来源", "这些来源的结果会被整块丢弃。点击可解除标记。");
+        java.util.List<String> keys =
+                new java.util.ArrayList<>(ContentFilterConfig.adultKeys());
+        java.util.Collections.sort(keys);
+        if (keys.isEmpty()) {
+            a.paragraph("暂无标记。");
+            return;
+        }
+        for (String key : keys) {
+            final String k = key;
+            String raw = ContentFilterConfig.markName(key);
+            final String name = (raw == null || raw.isEmpty()) ? key : raw;
+            link(
+                    name + "（" + key + "）",
+                    "原因：" + ContentFilterConfig.markReason(key),
+                    "safety-mark-" + key,
+                    () ->
+                            confirm(
+                                    "解除「" + name + "」的 NSFW 标记？",
+                                    () -> {
+                                        ContentFilterConfig.unmark(k);
+                                        a.refresh();
+                                    }));
+        }
+    }
+
+    private EditText pinInput(String hint) {
+        EditText input = new EditText(a);
+        input.setHint(hint);
+        input.setInputType(
+                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        input.setTextColor(MainActivity.WHITE);
+        input.setHintTextColor(MainActivity.MUTED);
+        input.setTextSize(18);
+        input.setPadding(a.dp(14), a.dp(10), a.dp(14), a.dp(10));
+        input.setBackground(a.bg(0xff36363e, 16));
+        return input;
+    }
+
+    private LinearLayout dialogBox(View field, String note) {
+        LinearLayout box = a.vertical();
+        box.setPadding(a.dp(20), a.dp(8), a.dp(20), 0);
+        box.addView(field);
+        if (note != null && !note.isEmpty())
+            box.addView(a.text(note, 12, MainActivity.MUTED));
+        return box;
     }
 
     void decoders() {

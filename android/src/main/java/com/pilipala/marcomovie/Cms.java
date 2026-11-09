@@ -48,6 +48,8 @@ public final class Cms {
 
     public static final class Category {
         public String id, name;
+        /** 父类目 id（CMS 接口的 type_pid，0/空 表示顶级）。用于「合集类目返回空」时回落到子类。 */
+        public String parent;
 
         public Category() {}
 
@@ -1101,6 +1103,7 @@ public final class Cms {
                 Category c = new Category();
                 c.id = j.optString("type_id");
                 c.name = j.optString("type_name", c.id);
+                c.parent = j.optString("type_pid", "");
                 if (!c.id.isEmpty()) result.add(c);
             }
         return result;
@@ -1219,9 +1222,22 @@ public final class Cms {
         return v;
     }
 
+    /** 无来源上下文：解析后做兜底条目过滤（覆盖所有列表 / 搜索 / 详情 / 手机端路径）。 */
     public static Listing listing(String json) throws Exception {
+        return parseListing(json, null);
+    }
+
+    /**
+     * 带来源上下文：解析后做「整块判定 + 成人来源累计标记」。
+     * 可疑来源在交付界面之前整块丢弃，实现「首次搜索就不露头」。
+     */
+    public static Listing listing(String json, Site site) throws Exception {
+        return parseListing(json, site);
+    }
+
+    private static Listing parseListing(String json, Site site) throws Exception {
+        Listing l = new Listing();
         if (json != null && json.trim().startsWith("<")) {
-            Listing l = new Listing();
             java.util.regex.Matcher listM =
                     java.util.regex.Pattern.compile(
                                     "<list\\b([^>]*)>", java.util.regex.Pattern.CASE_INSENSITIVE)
@@ -1261,19 +1277,20 @@ public final class Cms {
                 Video v = videoXml(vidM.group(1));
                 if (v.id != null && !v.id.isEmpty()) l.videos.add(v);
             }
-            return l;
+        } else {
+            JSONObject o = new JSONObject(json);
+            l.page = Math.max(1, o.optInt("page", 1));
+            l.pageCount = Math.max(l.page, o.optInt("pagecount", l.page));
+            JSONArray a = o.optJSONArray("list");
+            if (a == null) throw new IOException("来源没有返回 JSON list");
+            if (a.length() > 500) throw new IOException("单页超过 500 项限制");
+            for (int i = 0; i < a.length(); i++) {
+                JSONObject j = a.optJSONObject(i);
+                if (j != null) l.videos.add(video(j));
+            }
         }
-        JSONObject o = new JSONObject(json);
-        Listing l = new Listing();
-        l.page = Math.max(1, o.optInt("page", 1));
-        l.pageCount = Math.max(l.page, o.optInt("pagecount", l.page));
-        JSONArray a = o.optJSONArray("list");
-        if (a == null) throw new IOException("来源没有返回 JSON list");
-        if (a.length() > 500) throw new IOException("单页超过 500 项限制");
-        for (int i = 0; i < a.length(); i++) {
-            JSONObject j = a.optJSONObject(i);
-            if (j != null) l.videos.add(video(j));
-        }
+        if (site != null) Safety.applyBlock(site.key, site.name, l.videos);
+        else Safety.filterItems(l.videos);
         return l;
     }
 

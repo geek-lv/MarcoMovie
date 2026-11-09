@@ -30,6 +30,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
+import com.pilipala.marcomovie.adskip.AdSkipConfig;
+import com.pilipala.marcomovie.safety.ContentFilterConfig;
+import com.pilipala.marcomovie.safety.ContentGate;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -1003,23 +1006,11 @@ final class MobileShell {
             body.addView(histScroll, new LinearLayout.LayoutParams(-1, -2));
         }
 
-        // 3. Featured Hero Showcase Card Container ("今日首推")
-        final FrameLayout heroContainer = new FrameLayout(a);
-        heroContainer.setPadding(a.dp(16), a.dp(14), a.dp(16), 0);
-        heroContainer.setVisibility(View.GONE);
-        body.addView(heroContainer, new LinearLayout.LayoutParams(-1, -2));
+        // 3. 豆瓣热播榜货架（独立于当前片源，占据首页首屏原「今日首推」的位置）
+        DoubanHot.attach(a, body);
 
-        // 4. Horizontal Scrollable Category Pill Bar
-        HorizontalScrollView catScroll =
-                new HorizontalScrollView(a) {
-                    @Override
-                    protected void dispatchDraw(Canvas canvas) {
-                        int save = canvas.save();
-                        canvas.clipRect(getScrollX(), 0, getScrollX() + getWidth(), getHeight());
-                        super.dispatchDraw(canvas);
-                        canvas.restoreToCount(save);
-                    }
-                };
+        // 3. Horizontal Scrollable Category Pill Bar
+        HorizontalScrollView catScroll = new HorizontalScrollView(a);
         catScroll.setHorizontalScrollBarEnabled(false);
         catScroll.setClipChildren(true);
         catScroll.setClipToPadding(false);
@@ -1172,7 +1163,7 @@ final class MobileShell {
                                         cats = Cms.categories(raw);
                                         list =
                                                 new JSONObject(raw).has("list")
-                                                        ? Cms.listing(raw)
+                                                        ? Cms.listing(raw, siteSnapshot)
                                                         : new Cms.Listing();
                                         if (list.videos.isEmpty()
                                                 && cached != null
@@ -1183,12 +1174,13 @@ final class MobileShell {
                                         }
                                         if (list.videos.isEmpty()) {
                                             try {
-                                                list = Cms.listing(eng.homeVideos());
+                                                list = Cms.listing(eng.homeVideos(), siteSnapshot);
                                             } catch (Throwable ignored) {
                                             }
                                         }
                                         if (list.videos.isEmpty() && !cats.isEmpty()) {
-                                            list = Cms.listing(eng.category(cats.get(0).id, 1));
+                                            list = Cms.listing(
+                                                    eng.category(cats.get(0).id, 1), siteSnapshot);
                                         }
                                         HomeScreen.Snapshot saved =
                                                 new HomeScreen.Snapshot(
@@ -1207,7 +1199,8 @@ final class MobileShell {
                                                                 pageSnapshot,
                                                                 VideoFilters.remoteValues(
                                                                         definitions,
-                                                                        filterSnapshot)));
+                                                                        filterSnapshot)),
+                                                        siteSnapshot);
                                     }
                                     final HomeScreen.Snapshot finalHomeSnapshot = homeSnapshot;
                                     final List<Cms.Category> finalCats = cats;
@@ -1258,20 +1251,8 @@ final class MobileShell {
                                                                     ? "当前分类暂无影片"
                                                                     : "当前筛选暂无匹配，可继续加载更多影片");
                                                 }
-                                                // Render Featured Hero Showcase on Recommend tab
-                                                if (!configOrNetdisk
-                                                        && catSnapshot.isEmpty()
-                                                        && !currentVideos.isEmpty()) {
-                                                    heroContainer.removeAllViews();
-                                                    heroContainer.addView(
-                                                            buildHeroShowcaseCard(
-                                                                    siteSnapshot,
-                                                                    currentVideos.get(0)));
-                                                    heroContainer.setVisibility(View.VISIBLE);
-                                                } else {
-                                                    heroContainer.removeAllViews();
-                                                    heroContainer.setVisibility(View.GONE);
-                                                }
+                                                // 首页顶部固定位已由「豆瓣热播」货架承担，
+                                                // 不再渲染「今日首推」大卡（避免重复占位）。
                                                 renderVideoGrid(
                                                         gridContainer, siteSnapshot, currentVideos);
                                                 if (currentPage < totalPages) {
@@ -1339,108 +1320,6 @@ final class MobileShell {
 
         renderCategoryChips.run();
         fetchCategoryPage[0].run();
-    }
-
-    /**
-     * Builds the iPhone Featured Hero Showcase card (`_buildHeroShowcaseCard` in
-     * `adaptive_shell.dart`): rounded `24dp` glass container with dimmed backdrop artwork, left
-     * `2:3` poster, right `今日首推` pill, bold title, metadata chips, and bottom-right white `▶ 立即观看`
-     * capsule button.
-     */
-    private View buildHeroShowcaseCard(final Cms.Site site, final Cms.Video featured) {
-        FrameLayout card = new FrameLayout(a);
-        card.setTag("hero-watch-now-button");
-        card.setBackground(glassBg(0xff141c19, 0xff0d1311, a.dp(24), a.dp(0.8f), 0x38ffffff));
-        card.setClipToOutline(true);
-        MobileDetailScreen.bindTouchFeedback(card);
-        card.setOnClickListener(v -> a.openListing(site, featured));
-
-        // Ambient backdrop image
-        ImageView bgImg = new ImageView(a);
-        bgImg.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        bgImg.setAlpha(0.32f);
-        card.addView(bgImg, new FrameLayout.LayoutParams(-1, -1));
-        if (featured.poster != null && !featured.poster.isEmpty()) a.poster(featured.poster, bgImg);
-
-        // Dark gradient scrim
-        View scrim = new View(a);
-        scrim.setBackground(
-                new GradientDrawable(
-                        GradientDrawable.Orientation.TL_BR,
-                        new int[] {0x44000000, 0xb8080d0b, 0xeb060908}));
-        card.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
-
-        LinearLayout contentRow = a.row();
-        contentRow.setGravity(Gravity.CENTER_VERTICAL);
-        contentRow.setPadding(a.dp(16), a.dp(16), a.dp(16), a.dp(16));
-        card.addView(contentRow, new FrameLayout.LayoutParams(-1, a.dp(198)));
-
-        // Left 2:3 Poster
-        ImageView poster = new ImageView(a);
-        poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        poster.setBackground(a.bg(0xff1e2623, 14));
-        poster.setClipToOutline(true);
-        LinearLayout.LayoutParams posterLp = new LinearLayout.LayoutParams(a.dp(110), a.dp(166));
-        posterLp.rightMargin = a.dp(14);
-        contentRow.addView(poster, posterLp);
-        if (featured.poster != null && !featured.poster.isEmpty())
-            a.poster(featured.poster, poster);
-
-        // Right Column
-        LinearLayout rightCol = a.vertical();
-        contentRow.addView(rightCol, new LinearLayout.LayoutParams(0, -1, 1f));
-
-        TextView topBadge = a.text("✦ 今日首推 · " + site.name, 11, Color.WHITE);
-        topBadge.setTypeface(null, Typeface.BOLD);
-        topBadge.setSingleLine(true);
-        topBadge.setEllipsize(TextUtils.TruncateAt.END);
-        topBadge.setPadding(a.dp(9), a.dp(3), a.dp(9), a.dp(3));
-        topBadge.setBackground(glassBg(0x38ffffff, 0x24ffffff, a.dp(999), a.dp(0.6f), 0x33ffffff));
-        rightCol.addView(topBadge, new LinearLayout.LayoutParams(-2, -2));
-
-        TextView title = a.text(featured.title, 18, Color.WHITE);
-        title.setTypeface(null, Typeface.BOLD);
-        title.setMaxLines(2);
-        title.setEllipsize(TextUtils.TruncateAt.END);
-        title.setPadding(0, a.dp(7), 0, a.dp(5));
-        rightCol.addView(title);
-
-        LinearLayout chipsRow = a.row();
-        String[] tags = {featured.year, featured.area, featured.remarks};
-        boolean hasChip = false;
-        for (String rawTag : tags) {
-            if (rawTag == null || rawTag.trim().isEmpty()) continue;
-            TextView chip = a.text(rawTag.trim(), 10.5f, 0xffd1d5db);
-            chip.setTypeface(null, Typeface.BOLD);
-            chip.setSingleLine(true);
-            chip.setEllipsize(TextUtils.TruncateAt.END);
-            chip.setMaxWidth(a.dp(110));
-            chip.setPadding(a.dp(7), a.dp(2), a.dp(7), a.dp(2));
-            chip.setBackground(a.bg(0x29ffffff, 6));
-            LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(-2, -2);
-            chipLp.rightMargin = a.dp(6);
-            chipsRow.addView(chip, chipLp);
-            hasChip = true;
-        }
-        if (hasChip) {
-            rightCol.addView(chipsRow, new LinearLayout.LayoutParams(-1, -2));
-        }
-
-        View flexSpacer = new View(a);
-        rightCol.addView(flexSpacer, new LinearLayout.LayoutParams(1, 0, 1f));
-
-        // Bottom-right Watch Now white capsule button
-        LinearLayout bottomRow = a.row();
-        bottomRow.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        TextView watchBtn = a.text("▶ 立即观看", 12.5f, 0xff0b0f0d);
-        watchBtn.setTypeface(null, Typeface.BOLD);
-        watchBtn.setGravity(Gravity.CENTER);
-        watchBtn.setPadding(a.dp(14), a.dp(7), a.dp(14), a.dp(7));
-        watchBtn.setBackground(glassBg(0xffffffff, 0xffeaeaf0, a.dp(999), 0, 0));
-        bottomRow.addView(watchBtn, new LinearLayout.LayoutParams(-2, -2));
-        rightCol.addView(bottomRow, new LinearLayout.LayoutParams(-1, -2));
-
-        return card;
     }
 
     private List<VideoFilters.Definition> mobileFilterDefinitions() {
@@ -2157,7 +2036,8 @@ final class MobileShell {
                                             String notice = "";
                                             try {
                                                 Cms.Listing l =
-                                                        Cms.listing(a.engine(site).search(kw, 1));
+                                                        Cms.listing(
+                                                                a.engine(site).search(kw, 1), site);
                                                 for (Cms.Video v : l.videos) {
                                                     if (v.action == null || v.action.isEmpty()) {
                                                         matches.add(v);
@@ -3068,7 +2948,11 @@ final class MobileShell {
                             ? "片源与直播配置"
                             : settingsSubPage == 2
                                     ? "播放、解码与字幕"
-                                    : settingsSubPage == 3 ? "界面外观与偏好" : "备份、更新与诊断";
+                                    : settingsSubPage == 3
+                                            ? "界面外观与偏好"
+                                            : settingsSubPage == 6
+                                                    ? "智能跳过与内容过滤"
+                                                    : "备份、更新与诊断";
             TextView subTitle = a.text(subTitleText, 20, Color.WHITE);
             subTitle.setTypeface(null, Typeface.BOLD);
             topNav.addView(subTitle, new LinearLayout.LayoutParams(0, -2, 1));
@@ -3331,7 +3215,7 @@ final class MobileShell {
                                                 a.toast("已清空搜索历史记录");
                                             }
                                         }));
-            } else {
+            } else if (settingsSubPage == 4) {
                 addSectionHeader(body, "更新、备份与诊断");
                 addSettingCard(
                         body,
@@ -3356,6 +3240,38 @@ final class MobileShell {
                         () ->
                                 a.open(
                                         new MainActivity.Screen(() -> new SettingsScreen(a).show()),
+                                        true));
+            } else if (settingsSubPage == 6) {
+                addSectionHeader(body, "智能跳过与内容过滤");
+                final boolean adOn = AdSkipConfig.isEnabled();
+                addSettingCard(
+                        body,
+                        6,
+                        "口播广告跳过",
+                        adOn
+                                ? ("开启 · "
+                                        + AdSkipConfig.getKeywordCount()
+                                        + " 个关键词 · 跳 "
+                                        + AdSkipConfig.getSkipSeconds()
+                                        + " 秒 · "
+                                        + AdSkipConfig.getSensitivityLabel())
+                                : "已关闭",
+                        () ->
+                                a.open(
+                                        new MainActivity.Screen(
+                                                () -> new SettingsScreen(a).adSkip()),
+                                        true));
+                addSettingCard(
+                        body,
+                        6,
+                        "NSFW 内容过滤",
+                        ContentGate.locked()
+                                ? "过滤开启"
+                                : (ContentFilterConfig.unlocked() ? "临时解锁中" : "过滤关闭"),
+                        () ->
+                                a.open(
+                                        new MainActivity.Screen(
+                                                () -> new SettingsScreen(a).contentSafety()),
                                         true));
             }
             if (savedScrollY > 0) {
@@ -3388,6 +3304,16 @@ final class MobileShell {
                     });
         }
         addSettingCard(body, 2, "网盘与账号授权", "", () -> AccountPanel.show(a, null));
+        addSettingCard(
+                body,
+                6,
+                "智能跳过与内容过滤",
+                "口播广告自动跳过 · NSFW 内容过滤",
+                () -> {
+                    settingsSubPage = 6;
+                    sv.scrollTo(0, 0);
+                    refreshInPlace.run();
+                });
     }
 
     private void addSectionHeader(LinearLayout parent, String title) {
@@ -3830,6 +3756,10 @@ final class MobileShell {
                 case ICON_SYSTEM:
                 case ICON_LINK_CODE:
                 case ICON_UPDATE_CLOUD:
+                case 6:
+                    badgeBg = 0x26ef4444;
+                    strokeColor = 0xfff87171;
+                    break;
                 default:
                     badgeBg = 0x263b82f6;
                     strokeColor = 0xff60a5fa;
@@ -4528,6 +4458,25 @@ final class MobileShell {
                     }
                 case ICON_SYSTEM:
                 case ICON_UPDATE_CLOUD:
+                case 6:
+                    // Shield with inner forward-skip double chevron
+                    {
+                        Path shield = new Path();
+                        float stop = a.dp(7f);
+                        float sbot = h - a.dp(7f);
+                        shield.moveTo(cx, stop);
+                        shield.lineTo(w - a.dp(9f), cy - a.dp(4f));
+                        shield.lineTo(cx, sbot);
+                        shield.lineTo(a.dp(9f), cy - a.dp(4f));
+                        shield.close();
+                        c.drawPath(shield, paint);
+                        float iy = cy + a.dp(0.5f);
+                        c.drawLine(cx - a.dp(4f), iy - a.dp(3f), cx - a.dp(1f), iy, paint);
+                        c.drawLine(cx - a.dp(4f), iy + a.dp(3f), cx - a.dp(1f), iy, paint);
+                        c.drawLine(cx + a.dp(0.5f), iy - a.dp(3f), cx + a.dp(3.5f), iy, paint);
+                        c.drawLine(cx + a.dp(0.5f), iy + a.dp(3f), cx + a.dp(3.5f), iy, paint);
+                    }
+                    break;
                 default:
                     {
                         // Circular update ring + arrow

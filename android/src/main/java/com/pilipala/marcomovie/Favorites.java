@@ -47,6 +47,7 @@ final class Favorites {
                 e.id = o.optString("id");
                 e.title = o.optString("title");
                 e.poster = o.optString("poster");
+                if (Safety.hideRecord(e.title)) continue;
                 if (!e.site.isEmpty() && !e.id.isEmpty() && seen.add(e.key())) out.add(e);
             }
         } catch (Exception ignored) {

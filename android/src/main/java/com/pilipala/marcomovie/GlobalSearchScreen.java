@@ -798,7 +798,7 @@ public final class GlobalSearchScreen implements AutoCloseable {
                                 || a.phonetic.matches(title, query),
                 term -> {
                     try {
-                        return Cms.listing(a.engine(site).search(term, 1)).videos;
+                        return Cms.listing(a.engine(site).search(term, 1), site).videos;
                     } catch (com.pilipala.catpaw.CatPawHost.DrpySourceException error) {
                         if ("drpy_verification_required".equals(error.code))
                             throw new SearchCoordinator.VerificationRequiredException();
