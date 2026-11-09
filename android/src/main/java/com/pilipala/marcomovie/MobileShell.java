@@ -1005,26 +1005,11 @@ final class MobileShell {
             body.addView(histScroll, new LinearLayout.LayoutParams(-1, -2));
         }
 
-        // 2.5 豆瓣热播榜货架（独立于当前片源，解决片源无电视剧/片单不跟热播的问题）
+        // 3. 豆瓣热播榜货架（独立于当前片源，占据首页首屏原「今日首推」的位置）
         DoubanHot.attach(a, body);
 
-        // 3. Featured Hero Showcase Card Container ("今日首推")
-        final FrameLayout heroContainer = new FrameLayout(a);
-        heroContainer.setPadding(a.dp(16), a.dp(14), a.dp(16), 0);
-        heroContainer.setVisibility(View.GONE);
-        body.addView(heroContainer, new LinearLayout.LayoutParams(-1, -2));
-
-        // 4. Horizontal Scrollable Category Pill Bar
-        HorizontalScrollView catScroll =
-                new HorizontalScrollView(a) {
-                    @Override
-                    protected void dispatchDraw(Canvas canvas) {
-                        int save = canvas.save();
-                        canvas.clipRect(getScrollX(), 0, getScrollX() + getWidth(), getHeight());
-                        super.dispatchDraw(canvas);
-                        canvas.restoreToCount(save);
-                    }
-                };
+        // 3. Horizontal Scrollable Category Pill Bar
+        HorizontalScrollView catScroll = new HorizontalScrollView(a);
         catScroll.setHorizontalScrollBarEnabled(false);
         catScroll.setClipChildren(true);
         catScroll.setClipToPadding(false);
@@ -1265,20 +1250,8 @@ final class MobileShell {
                                                                     ? "当前分类暂无影片"
                                                                     : "当前筛选暂无匹配，可继续加载更多影片");
                                                 }
-                                                // Render Featured Hero Showcase on Recommend tab
-                                                if (!configOrNetdisk
-                                                        && catSnapshot.isEmpty()
-                                                        && !currentVideos.isEmpty()) {
-                                                    heroContainer.removeAllViews();
-                                                    heroContainer.addView(
-                                                            buildHeroShowcaseCard(
-                                                                    siteSnapshot,
-                                                                    currentVideos.get(0)));
-                                                    heroContainer.setVisibility(View.VISIBLE);
-                                                } else {
-                                                    heroContainer.removeAllViews();
-                                                    heroContainer.setVisibility(View.GONE);
-                                                }
+                                                // 首页顶部固定位已由「豆瓣热播」货架承担，
+                                                // 不再渲染「今日首推」大卡（避免重复占位）。
                                                 renderVideoGrid(
                                                         gridContainer, siteSnapshot, currentVideos);
                                                 if (currentPage < totalPages) {
@@ -1346,108 +1319,6 @@ final class MobileShell {
 
         renderCategoryChips.run();
         fetchCategoryPage[0].run();
-    }
-
-    /**
-     * Builds the iPhone Featured Hero Showcase card (`_buildHeroShowcaseCard` in
-     * `adaptive_shell.dart`): rounded `24dp` glass container with dimmed backdrop artwork, left
-     * `2:3` poster, right `今日首推` pill, bold title, metadata chips, and bottom-right white `▶ 立即观看`
-     * capsule button.
-     */
-    private View buildHeroShowcaseCard(final Cms.Site site, final Cms.Video featured) {
-        FrameLayout card = new FrameLayout(a);
-        card.setTag("hero-watch-now-button");
-        card.setBackground(glassBg(0xff141c19, 0xff0d1311, a.dp(24), a.dp(0.8f), 0x38ffffff));
-        card.setClipToOutline(true);
-        MobileDetailScreen.bindTouchFeedback(card);
-        card.setOnClickListener(v -> a.openListing(site, featured));
-
-        // Ambient backdrop image
-        ImageView bgImg = new ImageView(a);
-        bgImg.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        bgImg.setAlpha(0.32f);
-        card.addView(bgImg, new FrameLayout.LayoutParams(-1, -1));
-        if (featured.poster != null && !featured.poster.isEmpty()) a.poster(featured.poster, bgImg);
-
-        // Dark gradient scrim
-        View scrim = new View(a);
-        scrim.setBackground(
-                new GradientDrawable(
-                        GradientDrawable.Orientation.TL_BR,
-                        new int[] {0x44000000, 0xb8080d0b, 0xeb060908}));
-        card.addView(scrim, new FrameLayout.LayoutParams(-1, -1));
-
-        LinearLayout contentRow = a.row();
-        contentRow.setGravity(Gravity.CENTER_VERTICAL);
-        contentRow.setPadding(a.dp(16), a.dp(16), a.dp(16), a.dp(16));
-        card.addView(contentRow, new FrameLayout.LayoutParams(-1, a.dp(198)));
-
-        // Left 2:3 Poster
-        ImageView poster = new ImageView(a);
-        poster.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        poster.setBackground(a.bg(0xff1e2623, 14));
-        poster.setClipToOutline(true);
-        LinearLayout.LayoutParams posterLp = new LinearLayout.LayoutParams(a.dp(110), a.dp(166));
-        posterLp.rightMargin = a.dp(14);
-        contentRow.addView(poster, posterLp);
-        if (featured.poster != null && !featured.poster.isEmpty())
-            a.poster(featured.poster, poster);
-
-        // Right Column
-        LinearLayout rightCol = a.vertical();
-        contentRow.addView(rightCol, new LinearLayout.LayoutParams(0, -1, 1f));
-
-        TextView topBadge = a.text("✦ 今日首推 · " + site.name, 11, Color.WHITE);
-        topBadge.setTypeface(null, Typeface.BOLD);
-        topBadge.setSingleLine(true);
-        topBadge.setEllipsize(TextUtils.TruncateAt.END);
-        topBadge.setPadding(a.dp(9), a.dp(3), a.dp(9), a.dp(3));
-        topBadge.setBackground(glassBg(0x38ffffff, 0x24ffffff, a.dp(999), a.dp(0.6f), 0x33ffffff));
-        rightCol.addView(topBadge, new LinearLayout.LayoutParams(-2, -2));
-
-        TextView title = a.text(featured.title, 18, Color.WHITE);
-        title.setTypeface(null, Typeface.BOLD);
-        title.setMaxLines(2);
-        title.setEllipsize(TextUtils.TruncateAt.END);
-        title.setPadding(0, a.dp(7), 0, a.dp(5));
-        rightCol.addView(title);
-
-        LinearLayout chipsRow = a.row();
-        String[] tags = {featured.year, featured.area, featured.remarks};
-        boolean hasChip = false;
-        for (String rawTag : tags) {
-            if (rawTag == null || rawTag.trim().isEmpty()) continue;
-            TextView chip = a.text(rawTag.trim(), 10.5f, 0xffd1d5db);
-            chip.setTypeface(null, Typeface.BOLD);
-            chip.setSingleLine(true);
-            chip.setEllipsize(TextUtils.TruncateAt.END);
-            chip.setMaxWidth(a.dp(110));
-            chip.setPadding(a.dp(7), a.dp(2), a.dp(7), a.dp(2));
-            chip.setBackground(a.bg(0x29ffffff, 6));
-            LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(-2, -2);
-            chipLp.rightMargin = a.dp(6);
-            chipsRow.addView(chip, chipLp);
-            hasChip = true;
-        }
-        if (hasChip) {
-            rightCol.addView(chipsRow, new LinearLayout.LayoutParams(-1, -2));
-        }
-
-        View flexSpacer = new View(a);
-        rightCol.addView(flexSpacer, new LinearLayout.LayoutParams(1, 0, 1f));
-
-        // Bottom-right Watch Now white capsule button
-        LinearLayout bottomRow = a.row();
-        bottomRow.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        TextView watchBtn = a.text("▶ 立即观看", 12.5f, 0xff0b0f0d);
-        watchBtn.setTypeface(null, Typeface.BOLD);
-        watchBtn.setGravity(Gravity.CENTER);
-        watchBtn.setPadding(a.dp(14), a.dp(7), a.dp(14), a.dp(7));
-        watchBtn.setBackground(glassBg(0xffffffff, 0xffeaeaf0, a.dp(999), 0, 0));
-        bottomRow.addView(watchBtn, new LinearLayout.LayoutParams(-2, -2));
-        rightCol.addView(bottomRow, new LinearLayout.LayoutParams(-1, -2));
-
-        return card;
     }
 
     private List<VideoFilters.Definition> mobileFilterDefinitions() {

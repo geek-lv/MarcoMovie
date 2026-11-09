@@ -48,6 +48,8 @@ public final class Cms {
 
     public static final class Category {
         public String id, name;
+        /** 父类目 id（CMS 接口的 type_pid，0/空 表示顶级）。用于「合集类目返回空」时回落到子类。 */
+        public String parent;
 
         public Category() {}
 
@@ -1079,6 +1081,7 @@ public final class Cms {
                 Category c = new Category();
                 c.id = j.optString("type_id");
                 c.name = j.optString("type_name", c.id);
+                c.parent = j.optString("type_pid", "");
                 if (!c.id.isEmpty()) result.add(c);
             }
         return result;

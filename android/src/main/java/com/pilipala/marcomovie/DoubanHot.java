@@ -191,8 +191,9 @@ final class DoubanHot {
         box.addView(poster, new FrameLayout.LayoutParams(-1, -1));
 
         if (!TextUtils.isEmpty(item.poster)) {
-            // 豆瓣图床有防盗链，追加 Referer 走 ImageLoader 的内联头解析
-            a.poster(item.poster + "@Referer=" + REFERER, poster);
+            // 豆瓣图床有防盗链：既要 Referer，也会拒绝非浏览器 UA（okhttp/3.15 直接 403），
+            // 两个都以内联头形式交给 ImageLoader 解析
+            a.poster(coverAddress(item.poster), poster);
         }
 
         if (!TextUtils.isEmpty(item.rate)) {
@@ -212,6 +213,8 @@ final class DoubanHot {
         card.addView(box, boxLp);
 
         TextView name = a.text(item.title, 12.5f, MainActivity.WHITE);
+        // 固定占两行高度：一部剧名可能 1 行也可能 2 行，不锁行数的话同一排卡片高矮不齐
+        name.setMinLines(2);
         name.setMaxLines(2);
         name.setEllipsize(TextUtils.TruncateAt.END);
         name.setLineSpacing(0, 0.95f);
@@ -237,6 +240,11 @@ final class DoubanHot {
     }
 
     // ---------------------------------------------------------------- 网络与缓存
+
+    /** 封面地址 + 内联请求头（Referer 防防盗链、UA 防「非浏览器 403」）。 */
+    private static String coverAddress(String poster) {
+        return poster + "@Referer=" + REFERER + "@User-Agent=" + UA;
+    }
 
     private static List<Item> fetch(String type) throws Exception {
         String url =
