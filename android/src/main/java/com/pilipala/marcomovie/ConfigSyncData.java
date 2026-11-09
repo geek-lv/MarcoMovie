@@ -68,7 +68,7 @@ final class ConfigSyncData {
         root.put("adskip", adskip);
 
         JSONObject safety = new JSONObject();
-        safety.put("enabled", ContentFilterConfig.isEnabled());
+        safety.put("enabled", ContentFilterConfig.enabled());
         safety.put("extra_keywords", ContentFilterConfig.getExtraKeywordsRaw());
         root.put("safety", safety);
 

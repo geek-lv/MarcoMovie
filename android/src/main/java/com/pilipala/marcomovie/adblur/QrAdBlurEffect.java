@@ -353,6 +353,10 @@ public final class QrAdBlurEffect implements GlEffect {
             try {
                 frameIndex++;
 
+                // 基类在调用 drawFrame 前已把输出 FBO 绑定为当前帧缓冲（并已 clear）；
+                // 中间的检测 / 截图步骤会切换绑定点，故先记下真正的输出 FBO，最终合成再切回。
+                int outFbo = currentFbo();
+
                 // 0) 周期性热重载模板（增删特征图免重配置生效）
                 if (frameIndex % 30 == 0) {
                     try {
@@ -387,7 +391,6 @@ public final class QrAdBlurEffect implements GlEffect {
                 }
 
                 // 3) 模糊（开启且有矩形）或透传（关闭 / 无矩形）
-                int outFbo = currentFbo();
                 if (enabled && lastRect != null) {
                     // H 模糊: input -> tempA
                     focusFramebufferUsingCurrentContext(tempAFbo, outputW, outputH);
