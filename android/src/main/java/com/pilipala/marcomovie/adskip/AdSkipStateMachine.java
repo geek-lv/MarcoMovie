@@ -81,8 +81,14 @@ public class AdSkipStateMachine {
     /** 识别引擎要求的采样率 */
     public static final int KWS_SAMPLE_RATE = 16000;
 
-    /** 每次送给引擎的音频块长度（0.5 秒） */
-    private static final int CHUNK_SAMPLES = KWS_SAMPLE_RATE / 2;
+    /**
+     * 每次送给引擎的音频块长度（0.2 秒）。
+     *
+     * <p>原为 0.5s：命中判定最坏要多等一个块，表现为"词都念完了还要愣半秒才跳"。
+     * 引擎单块耗时 25ms 上下（实时占比 ~5%），改小后总开销几乎不变，
+     * 但把"命中 → 起跳"的量化延迟从 500ms 压到 200ms，队列最大滞后也从 4s 降到 1.6s。
+     */
+    private static final int CHUNK_SAMPLES = KWS_SAMPLE_RATE / 5;
 
     /** 命中点相对音频时钟的回退补偿，用于抵消识别窗口延迟，避免跳过正片 */
     private static final long HIT_BACKOFF_MS = 1000;
@@ -100,7 +106,8 @@ public class AdSkipStateMachine {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     /**
      * PCM 队列容量。它直接决定识别的最大滞后 = 容量 × CHUNK_SAMPLES / 采样率。
-     * 32 块 × 0.5s = 16s，表现为"播报完了很久才跳"甚至整块被挤掉丢检，故收紧到 8（4s）。
+     * 32 块 × 0.5s = 16s，表现为"播报完了很久才跳"甚至整块被挤掉丢检，故收紧到 8。
+     * 块长改 0.2s 后，8 块 = 1.6s 上限，容错更紧、追帧更快。
      */
     private static final int PCM_QUEUE_CAPACITY = 8;
 

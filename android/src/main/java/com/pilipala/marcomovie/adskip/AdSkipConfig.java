@@ -24,11 +24,34 @@ public class AdSkipConfig {
      * 于是全新安装后功能恒为关闭状态 —— 这正是「移植后检测没起作用」的原因之一。
      * 这里给默认值让功能开箱可用，用户可在设置里随时清空/覆盖。
      */
-    public static final String DEFAULT_KEYWORDS = "澳门新葡京,新葡京";
+    public static final String DEFAULT_KEYWORDS = "澳门新葡京,新葡京,别再羡慕别人暴富";
+
+    /**
+     * 识别灵敏度档位。数字越大越容易命中，也越容易误报。
+     *
+     * <p>具体参数（关键词 boost / 概率阈值 / 词尾静音帧数 / 并行搜索路径）由
+     * {@code SherpaKwsEngine} 按档位下发，改动这里只影响展示文案。
+     * <ul>
+     *   <li>0 标准：词尾必须落静音才判定，适合口播之间有明显停顿的广告</li>
+     *   <li>1 灵敏：把词尾静音要求放宽到 1 帧，连续说话（"…暴富"紧跟"澳门新葡京"）也能命中</li>
+     *   <li>2 极敏：阈值与并行路径再放宽一档，适合叠背景音乐的弱口播，误报略升</li>
+     * </ul>
+     */
+    public static final String[] SENSITIVITY_LABELS = {"标准", "灵敏", "极敏"};
+
+    public static final String[] SENSITIVITY_HINTS = {
+        "词尾需停顿 · 误报最低",
+        "词尾不等停顿 · 推荐",
+        "阈值更低 · 最易命中",
+    };
+
+    /** 默认「灵敏」：实测「别再羡慕别人暴富」后面紧跟品牌时，标准档会漏检 */
+    public static final int DEFAULT_SENSITIVITY = 1;
 
     private static final String PREFS = "adskip";
     private static final String KEY_SKIP_SECONDS = "skip_seconds";
     private static final String KEY_KEYWORDS_RAW = "keywords_raw";
+    private static final String KEY_SENSITIVITY = "sensitivity";
 
     private static volatile SharedPreferences prefs;
 
@@ -74,6 +97,22 @@ public class AdSkipConfig {
     /** 返回毫秒，便于直接 seekTo */
     public static long getSkipMillis() {
         return getSkipSeconds() * 1000L;
+    }
+
+    /** 识别灵敏度档位，见 {@link #SENSITIVITY_LABELS} */
+    public static int getSensitivity() {
+        int v = getInt(KEY_SENSITIVITY, DEFAULT_SENSITIVITY);
+        return v < 0 ? 0 : Math.min(v, SENSITIVITY_LABELS.length - 1);
+    }
+
+    public static void setSensitivity(int level) {
+        int v = level < 0 ? 0 : Math.min(level, SENSITIVITY_LABELS.length - 1);
+        put(KEY_SENSITIVITY, v);
+    }
+
+    /** 当前档位名称，用于设置页副标题 */
+    public static String getSensitivityLabel() {
+        return SENSITIVITY_LABELS[getSensitivity()];
     }
 
     /** 原始关键词文本，用于回填输入框 */

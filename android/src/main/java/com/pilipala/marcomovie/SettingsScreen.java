@@ -105,6 +105,13 @@ final class SettingsScreen {
                 "adskip-keywords",
                 this::editAdKeywords);
         link(
+                "识别灵敏度",
+                AdSkipConfig.getSensitivityLabel()
+                        + " · "
+                        + AdSkipConfig.SENSITIVITY_HINTS[AdSkipConfig.getSensitivity()],
+                "adskip-sensitivity",
+                this::pickAdSensitivity);
+        link(
                 "命中后跳过时长",
                 AdSkipConfig.getSkipSeconds() == 0
                         ? "关闭"
@@ -137,6 +144,7 @@ final class SettingsScreen {
                                     AdSkipConfig.setKeywordsRaw(AdSkipConfig.DEFAULT_KEYWORDS);
                                     AdSkipConfig.setSkipSeconds(
                                             AdSkipConfig.DEFAULT_SKIP_SECONDS);
+                                    AdSkipConfig.setSensitivity(AdSkipConfig.DEFAULT_SENSITIVITY);
                                     AdSkipController.get().onConfigChanged(a);
                                     a.refresh();
                                 }));
@@ -166,6 +174,30 @@ final class SettingsScreen {
                             a.toast("已保存 " + AdSkipConfig.getKeywordCount() + " 个关键词");
                             a.refresh();
                         })
+                .show();
+    }
+
+    void pickAdSensitivity() {
+        String[] labels = new String[AdSkipConfig.SENSITIVITY_LABELS.length];
+        for (int i = 0; i < labels.length; i++) {
+            labels[i] = AdSkipConfig.SENSITIVITY_LABELS[i] + " · " + AdSkipConfig.SENSITIVITY_HINTS[i];
+        }
+        new AppDialog.Builder(a)
+                .setTitle("识别灵敏度")
+                .setMessage(
+                        "口播之间没有停顿（例如「别再羡慕别人暴富」后面紧跟「澳门新葡京」）时，"
+                                + "标准档会因为等不到词尾静音而漏检，这时选「灵敏」或「极敏」。\n"
+                                + "档位越高越容易命中，也越可能把剧里台词误判成广告。")
+                .setSingleChoiceItems(
+                        labels,
+                        AdSkipConfig.getSensitivity(),
+                        (d, i) -> {
+                            AdSkipConfig.setSensitivity(i);
+                            AdSkipController.get().onConfigChanged(a);
+                            d.dismiss();
+                            a.refresh();
+                        })
+                .setNegativeButton("取消", null)
                 .show();
     }
 
