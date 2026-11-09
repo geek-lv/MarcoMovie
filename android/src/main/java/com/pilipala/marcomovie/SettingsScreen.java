@@ -118,7 +118,7 @@ final class SettingsScreen {
                 "settings-adskip",
                 () -> open(this::adSkip));
         link(
-                "内容安全",
+                "NSFW 内容过滤",
                 ContentGate.locked()
                         ? "过滤开启"
                         : (ContentFilterConfig.unlocked() ? "临时解锁中" : "过滤关闭"),
@@ -263,8 +263,8 @@ final class SettingsScreen {
 
     void contentSafety() {
         page(
-                "内容安全",
-                "本地关键词 / 番号 / 来源画像过滤，不联网、不上传。判定为成人的条目、频道与整块来源结果在显示前就被丢弃。");
+                "NSFW 内容过滤",
+                "本地关键词 / 番号 / 来源画像过滤，不联网、不上传。判定为 NSFW 的条目、频道与整块来源结果在显示前就被丢弃。");
         if (ContentFilterConfig.hasPin())
             link(
                     "儿童锁",
@@ -300,7 +300,7 @@ final class SettingsScreen {
                 "safety-pin",
                 this::editPin);
         link(
-                "已标记成人来源",
+                "已标记 NSFW 来源",
                 ContentFilterConfig.adultCount() + " 个 · 点击查看 / 解除",
                 "safety-marks",
                 () -> open(this::adultMarks));
@@ -310,7 +310,7 @@ final class SettingsScreen {
                 "safety-clear-marks",
                 () ->
                         confirm(
-                                "清除全部成人来源标记？",
+                                "清除全部 NSFW 来源标记？",
                                 () -> {
                                     ContentFilterConfig.clearMarks();
                                     AdultSourceStats.clearAll();
@@ -407,7 +407,7 @@ final class SettingsScreen {
     }
 
     void adultMarks() {
-        page("已标记成人来源", "这些来源的结果会被整块丢弃。点击可解除标记。");
+        page("已标记 NSFW 来源", "这些来源的结果会被整块丢弃。点击可解除标记。");
         java.util.List<String> keys =
                 new java.util.ArrayList<>(ContentFilterConfig.adultKeys());
         java.util.Collections.sort(keys);
@@ -425,7 +425,7 @@ final class SettingsScreen {
                     "safety-mark-" + key,
                     () ->
                             confirm(
-                                    "解除「" + name + "」的成人标记？",
+                                    "解除「" + name + "」的 NSFW 标记？",
                                     () -> {
                                         ContentFilterConfig.unmark(k);
                                         a.refresh();
