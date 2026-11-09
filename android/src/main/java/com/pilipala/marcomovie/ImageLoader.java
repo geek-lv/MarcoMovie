@@ -95,14 +95,14 @@ final class ImageLoader {
                                             }
                                             return;
                                         }
-                                        HttpURLConnection connection = null;
                                         try {
                                             Cms.ImageRequest source = Cms.imageRequest(address);
-                                            String targetUrl = Cms.normalizeHttp(source.url);
-                                            if (targetUrl.startsWith("catpaw://"))
-                                                targetUrl =
+                                            String originalUrl = Cms.normalizeHttp(source.url);
+                                            if (originalUrl.startsWith("catpaw://"))
+                                                originalUrl =
                                                         new com.pilipala.catpaw.CatPawHost(a)
-                                                                .resolve(targetUrl);
+                                                                .resolve(originalUrl);
+                                            String targetUrl = originalUrl;
                                             if (targetUrl.contains("doubanio.com")) {
                                                 targetUrl =
                                                         targetUrl
@@ -122,47 +122,15 @@ final class ImageLoader {
                                                                         "/view/photo/mpic/",
                                                                         "/view/photo/lpic/");
                                             }
-                                            connection =
-                                                    (HttpURLConnection)
-                                                            new URL(targetUrl).openConnection();
-                                            for (Map.Entry<String, String> header :
-                                                    source.headers.entrySet())
-                                                connection.setRequestProperty(
-                                                        header.getKey(), header.getValue());
-                                            String fragment = new URL(targetUrl).getRef();
-                                            if (fragment != null
-                                                    && fragment.startsWith("mm-emby=")) {
-                                                connection.setInstanceFollowRedirects(false);
-                                                com.pilipala.emby.EmbyLibrary library =
-                                                        com.pilipala.emby.EmbyAccounts.open(
-                                                                a,
-                                                                "emby://account/"
-                                                                        + fragment.substring(8));
-                                                for (Map.Entry<String, String> h :
-                                                        library.imageHeaders(targetUrl).entrySet())
-                                                    connection.setRequestProperty(
-                                                            h.getKey(), h.getValue());
-                                            }
-                                            connection.setConnectTimeout(7000);
-                                            connection.setReadTimeout(8000);
-                                            if (!source.headers.containsKey("User-Agent"))
-                                                connection.setRequestProperty(
-                                                        "User-Agent", Cms.USER_AGENT);
-                                            RequestScope.attach(connection);
                                             byte[] bytes;
-                                            try (InputStream in = connection.getInputStream()) {
-                                                ByteArrayOutputStream out =
-                                                        new ByteArrayOutputStream();
-                                                byte[] buffer = new byte[8192];
-                                                int n;
-                                                while ((n = in.read(buffer)) != -1) {
-                                                    RequestScope.current().check();
-                                                    if (out.size() + n
-                                                            > (detail ? 8 : 3) * 1024 * 1024)
-                                                        throw new IOException("Poster too large");
-                                                    out.write(buffer, 0, n);
-                                                }
-                                                bytes = out.toByteArray();
+                                            try {
+                                                bytes = readBytes(a, targetUrl, source, detail);
+                                            } catch (IOException upgradeFailed) {
+                                                // 豆瓣 l_ratio_poster（大图）对新上线条目常常不存在，
+                                                // 升级地址 404 时退回原始小图，否则封面会一直空着
+                                                if (targetUrl.equals(originalUrl))
+                                                    throw upgradeFailed;
+                                                bytes = readBytes(a, originalUrl, source, detail);
                                             }
                                             BitmapFactory.Options options =
                                                     new BitmapFactory.Options();
@@ -221,15 +189,16 @@ final class ImageLoader {
                                                             }
                                                         });
                                             }
-                                        } catch (Exception ignored) {
+                                        } catch (Exception e) {
+                                            // 静默失败会让「封面空白」无从排查，这里留一条可查的痕迹
+                                            AppLog.w(
+                                                    "ImageLoader",
+                                                    "poster failed: " + address,
+                                                    e);
                                         } finally {
                                             synchronized (IN_FLIGHT) {
                                                 if (IN_FLIGHT.get(key) == owned)
                                                     IN_FLIGHT.remove(key);
-                                            }
-                                            if (connection != null) {
-                                                RequestScope.detach(connection);
-                                                connection.disconnect();
                                             }
                                         }
                                     });
@@ -239,6 +208,45 @@ final class ImageLoader {
                     }
                     a.artworkRequests.add(request);
                 });
+    }
+
+    /** 单次下载（含来源请求头、emby 头、超时与体积上限），连接在方法内必定关闭。 */
+    private static byte[] readBytes(
+            MainActivity a, String url, Cms.ImageRequest source, boolean detail) throws Exception {
+        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+        try {
+            for (Map.Entry<String, String> header : source.headers.entrySet())
+                connection.setRequestProperty(header.getKey(), header.getValue());
+            String fragment = new URL(url).getRef();
+            if (fragment != null && fragment.startsWith("mm-emby=")) {
+                connection.setInstanceFollowRedirects(false);
+                com.pilipala.emby.EmbyLibrary library =
+                        com.pilipala.emby.EmbyAccounts.open(
+                                a, "emby://account/" + fragment.substring(8));
+                for (Map.Entry<String, String> h : library.imageHeaders(url).entrySet())
+                    connection.setRequestProperty(h.getKey(), h.getValue());
+            }
+            connection.setConnectTimeout(7000);
+            connection.setReadTimeout(8000);
+            if (!source.headers.containsKey("User-Agent"))
+                connection.setRequestProperty("User-Agent", Cms.USER_AGENT);
+            RequestScope.attach(connection);
+            try (InputStream in = connection.getInputStream()) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                byte[] buffer = new byte[8192];
+                int n;
+                while ((n = in.read(buffer)) != -1) {
+                    RequestScope.current().check();
+                    if (out.size() + n > (detail ? 8 : 3) * 1024 * 1024)
+                        throw new IOException("Poster too large");
+                    out.write(buffer, 0, n);
+                }
+                return out.toByteArray();
+            }
+        } finally {
+            RequestScope.detach(connection);
+            connection.disconnect();
+        }
     }
 
     static View createAtmosphere(MainActivity a) {
