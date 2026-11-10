@@ -602,6 +602,22 @@ public final class MainActivity extends Activity {
                     SourcePicker.applyEdits(this, config, configOrigin);
                     SourcePreferences.restoreDefault(this);
                 }
+            else {
+                // 内置默认订阅源（本地未提交改动）：用户尚未导入任何配置时，从 assets 种子初始化，
+                // 让应用首次启动即带有订阅源。用户后续在应用内导入/编辑会写入 getFilesDir()/config.json，
+                // 下次启动走上面的 f.exists() 分支，本种子分支不再生效，不影响其持久化配置。
+                try (InputStream ai = getAssets().open("config.json")) {
+                    String seed = Cms.read(ai, Cms.MAX_JSON);
+                    try (java.io.FileOutputStream ao = new java.io.FileOutputStream(f)) {
+                        ao.write(seed.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                    config = Cms.parseConfig(seed, configOrigin);
+                    SourcePicker.applyEdits(this, config, configOrigin);
+                    SourcePreferences.restoreDefault(this);
+                } catch (Exception se) {
+                    AppLog.w("MainActivity", "seed built-in config failed", se);
+                }
+            }
         } catch (Exception e) {
             AppLog.w("MainActivity", "load saved config failed", e);
             config = null;
@@ -843,6 +859,7 @@ public final class MainActivity extends Activity {
                         ui.post(this::syncRootDimensions);
                     }
                 });
+    }
 
     @Override
     protected void onSaveInstanceState(Bundle out) {
@@ -1191,7 +1208,9 @@ public final class MainActivity extends Activity {
                         View first = root.findViewWithTag("primary");
                         if (first == null) first = root.findViewWithTag("detail-play");
                         if (first == null && s.home) {
-                            first = root.findViewWithTag("home-tab:0");
+                            // 首页主体已是豆瓣瀑布流：优先聚焦「电视剧」tab；旧分类瀑布流的标签仅作兜底
+                            first = root.findViewWithTag("douban-tab:0");
+                            if (first == null) first = root.findViewWithTag("home-tab:0");
                             if (first == null) first = root.findViewWithTag("source-switcher");
                         }
                         if (first == null) first = root.findViewWithTag("nav-home");
