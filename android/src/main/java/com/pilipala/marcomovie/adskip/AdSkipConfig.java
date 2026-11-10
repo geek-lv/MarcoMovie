@@ -40,9 +40,7 @@ public class AdSkipConfig {
     public static final String[] SENSITIVITY_LABELS = {"标准", "灵敏", "极敏"};
 
     public static final String[] SENSITIVITY_HINTS = {
-        "词尾需停顿 · 误报最低",
-        "词尾不等停顿 · 推荐",
-        "阈值更低 · 最易命中",
+        "词尾需停顿 · 误报最低", "词尾不等停顿 · 推荐", "阈值更低 · 最易命中",
     };
 
     /** 默认「灵敏」：实测「别再羡慕别人暴富」后面紧跟品牌时，标准档会漏检 */
@@ -60,7 +58,9 @@ public class AdSkipConfig {
         if (prefs != null) return;
         synchronized (AdSkipConfig.class) {
             if (prefs == null && context != null) {
-                prefs = context.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                prefs =
+                        context.getApplicationContext()
+                                .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             }
         }
     }

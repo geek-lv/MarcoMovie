@@ -42,8 +42,7 @@ public final class AdultSourceStats {
 
     private static volatile SharedPreferences prefs;
 
-    private AdultSourceStats() {
-    }
+    private AdultSourceStats() {}
 
     /**
      * 一个来源本次响应（含分页）的判定素材。
@@ -55,6 +54,7 @@ public final class AdultSourceStats {
         public int seen;
         public int hits;
         public int strongHits;
+
         /** 响应里自带的分类清单给出的结论，null 表示分类清单没定性 */
         public String classReason;
 
@@ -68,8 +68,9 @@ public final class AdultSourceStats {
         if (prefs != null) return;
         synchronized (AdultSourceStats.class) {
             if (prefs == null && context != null) {
-                prefs = context.getApplicationContext()
-                        .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                prefs =
+                        context.getApplicationContext()
+                                .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             }
         }
     }
@@ -87,7 +88,8 @@ public final class AdultSourceStats {
      *
      * @return true 表示本块结果必须丢弃（该来源可能还没被永久标记）
      */
-    public static synchronized boolean judgeBlock(String sourceKey, String sourceName, Block block) {
+    public static synchronized boolean judgeBlock(
+            String sourceKey, String sourceName, Block block) {
         if (sourceKey == null || sourceKey.isEmpty() || block == null) return false;
         // 用户已否决过的来源：不再反复标记，也不再因其内容丢结果
         if (ContentFilterConfig.isDismissed(sourceKey)) return false;
@@ -109,8 +111,8 @@ public final class AdultSourceStats {
             // 旧行为：跨多次搜索累积，够数才整源屏蔽
             save(sourceKey, totalHits, totalSeen, strikes);
             if (totalHits >= MIN_HITS && totalHits * 2 >= totalSeen) {
-                ContentFilterConfig.markAdult(sourceKey,
-                        "返回条目多为成人内容（" + totalHits + "/" + totalSeen + "）", sourceName);
+                ContentFilterConfig.markAdult(
+                        sourceKey, "返回条目多为成人内容（" + totalHits + "/" + totalSeen + "）", sourceName);
                 return true;
             }
             return false;
@@ -160,7 +162,8 @@ public final class AdultSourceStats {
      * @return 定性理由；分类清单看起来干净则返回 null
      */
     public static String observeClasses(String sourceKey, String sourceName, JSONArray classes) {
-        if (sourceKey == null || sourceKey.isEmpty() || classes == null || classes.length() == 0) return null;
+        if (sourceKey == null || sourceKey.isEmpty() || classes == null || classes.length() == 0)
+            return null;
         if (ContentFilterConfig.isDismissed(sourceKey)) return null;
         List<String> names = new ArrayList<>();
         for (int i = 0; i < classes.length(); i++) {
@@ -174,7 +177,6 @@ public final class AdultSourceStats {
         }
         return reason;
     }
-
 
     /** 清空某个来源的累计计数（用户在设置页取消标记时调用） */
     public static synchronized void reset(String sourceKey) {
@@ -190,14 +192,16 @@ public final class AdultSourceStats {
 
     private static int[] totals(String sourceKey) {
         SharedPreferences p = prefs;
-        if (p == null) return new int[]{0, 0, 0};
+        if (p == null) return new int[] {0, 0, 0};
         String raw = p.getString(KEY_PREFIX + sourceKey, "");
-        if (raw.isEmpty()) return new int[]{0, 0, 0};
+        if (raw.isEmpty()) return new int[] {0, 0, 0};
         try {
             JSONObject json = new JSONObject(raw);
-            return new int[]{json.optInt("hits", 0), json.optInt("seen", 0), json.optInt("strikes", 0)};
+            return new int[] {
+                json.optInt("hits", 0), json.optInt("seen", 0), json.optInt("strikes", 0)
+            };
         } catch (Exception ignored) {
-            return new int[]{0, 0, 0};
+            return new int[] {0, 0, 0};
         }
     }
 
@@ -205,7 +209,8 @@ public final class AdultSourceStats {
         SharedPreferences p = prefs;
         if (p == null) return;
         try {
-            JSONObject json = new JSONObject().put("hits", hits).put("seen", seen).put("strikes", strikes);
+            JSONObject json =
+                    new JSONObject().put("hits", hits).put("seen", seen).put("strikes", strikes);
             p.edit().putString(KEY_PREFIX + sourceKey, json.toString()).apply();
         } catch (Exception ignored) {
         }

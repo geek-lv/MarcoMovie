@@ -17,12 +17,9 @@ public class AdBlurController {
     private static volatile AdBlurController instance;
 
     private Context appContext;
-    @Nullable
-    private QrAdBlurEffect currentEffect;
-    @Nullable
-    private CaptureListener captureListener;
-    @Nullable
-    private Runnable onReload;
+    @Nullable private QrAdBlurEffect currentEffect;
+    @Nullable private CaptureListener captureListener;
+    @Nullable private Runnable onReload;
 
     public static AdBlurController get(Context context) {
         if (instance == null) {

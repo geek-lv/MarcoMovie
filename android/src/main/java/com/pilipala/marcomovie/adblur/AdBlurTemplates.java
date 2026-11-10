@@ -25,8 +25,10 @@ import java.util.List;
 public class AdBlurTemplates {
 
     private static final String DIR = "adblur_templates";
+
     /** 模板最长边上限（降采样），也是 GPU 匹配内层循环的硬上限。 */
     public static final int MAX_DIM = 64;
+
     private static final long MAX_BYTES = 4 * 1024 * 1024; // 单文件上限，防滥用
 
     private static File dir(Context c) {
@@ -55,8 +57,11 @@ public class AdBlurTemplates {
             m.setScale(scale, scale);
             t = Bitmap.createBitmap(crop, 0, 0, crop.getWidth(), crop.getHeight(), m, true);
         }
-        String name = (label == null || label.isEmpty() ? "tpl" : sanitize(label))
-                + "_" + (System.currentTimeMillis() % 1000000) + ".png";
+        String name =
+                (label == null || label.isEmpty() ? "tpl" : sanitize(label))
+                        + "_"
+                        + (System.currentTimeMillis() % 1000000)
+                        + ".png";
         File f = new File(d, name);
         try (FileOutputStream os = new FileOutputStream(f)) {
             t.compress(Bitmap.CompressFormat.PNG, 100, os);
@@ -72,7 +77,9 @@ public class AdBlurTemplates {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < s.length() && sb.length() < 24; i++) {
             char ch = s.charAt(i);
-            if (Character.isLetterOrDigit(ch) || ch == '_' || ch == '-'
+            if (Character.isLetterOrDigit(ch)
+                    || ch == '_'
+                    || ch == '-'
                     || (ch >= '一' && ch <= '鿿')) {
                 sb.append(ch);
             } else {
@@ -87,12 +94,14 @@ public class AdBlurTemplates {
         File d = dir(c);
         List<String> out = new ArrayList<>();
         if (d.exists()) {
-            String[] fs = d.list(new FilenameFilter() {
-                @Override
-                public boolean accept(File dir, String n) {
-                    return n.endsWith(".png");
-                }
-            });
+            String[] fs =
+                    d.list(
+                            new FilenameFilter() {
+                                @Override
+                                public boolean accept(File dir, String n) {
+                                    return n.endsWith(".png");
+                                }
+                            });
             if (fs != null) {
                 java.util.Arrays.sort(fs);
                 for (String n : fs) out.add(n);

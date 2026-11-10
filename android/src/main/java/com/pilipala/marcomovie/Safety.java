@@ -30,8 +30,7 @@ public final class Safety {
     /** 条目是否应隐藏（详情入口兜底用；不产生统计副作用） */
     public static boolean hideItem(Cms.Video v) {
         return v != null
-                && ContentGate.blockedItem(
-                        v.title, v.genre, v.remarks, v.area, v.description);
+                && ContentGate.blockedItem(v.title, v.genre, v.remarks, v.area, v.description);
     }
 
     /**
@@ -68,9 +67,7 @@ public final class Safety {
                 continue;
             }
             block.seen++;
-            String why =
-                    ContentGate.reasonItem(
-                            v.title, v.genre, v.remarks, v.area, v.description);
+            String why = ContentGate.reasonItem(v.title, v.genre, v.remarks, v.area, v.description);
             if (why != null) {
                 block.count(1, AdultRules.isStrongReason(why) ? 1 : 0);
                 iterator.remove();
@@ -98,8 +95,6 @@ public final class Safety {
 
     /** 来源是否已被永久标记为成人源（用于跳过请求 / 隐藏来源） */
     public static boolean siteHidden(Cms.Site site) {
-        return site != null
-                && ContentGate.locked()
-                && ContentFilterConfig.isAdult(site.key);
+        return site != null && ContentGate.locked() && ContentFilterConfig.isAdult(site.key);
     }
 }

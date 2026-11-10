@@ -50,7 +50,9 @@ public class RectSelectView extends View {
 
     private void computeLayout() {
         if (bmp == null || bmp.getWidth() == 0) return;
-        scale = Math.min((float) getWidth() / bmp.getWidth(), (float) getHeight() / bmp.getHeight());
+        scale =
+                Math.min(
+                        (float) getWidth() / bmp.getWidth(), (float) getHeight() / bmp.getHeight());
         if (scale <= 0) scale = 1;
         ox = (getWidth() - bmp.getWidth() * scale) / 2f;
         oy = (getHeight() - bmp.getHeight() * scale) / 2f;
@@ -73,7 +75,12 @@ public class RectSelectView extends View {
             RectF dr = bmpRectToView(rect);
             // 矩形外变暗（上下左右四块）
             canvas.drawRect(ox, oy, ox + bmp.getWidth() * scale, dr.top, dimPaint);
-            canvas.drawRect(ox, dr.bottom, ox + bmp.getWidth() * scale, oy + bmp.getHeight() * scale, dimPaint);
+            canvas.drawRect(
+                    ox,
+                    dr.bottom,
+                    ox + bmp.getWidth() * scale,
+                    oy + bmp.getHeight() * scale,
+                    dimPaint);
             canvas.drawRect(ox, dr.top, dr.left, dr.bottom, dimPaint);
             canvas.drawRect(dr.right, dr.top, ox + bmp.getWidth() * scale, dr.bottom, dimPaint);
             canvas.drawRect(dr, framePaint);
@@ -89,8 +96,11 @@ public class RectSelectView extends View {
     }
 
     private RectF bmpRectToView(RectF r) {
-        return new RectF(ox + r.left * scale, oy + r.top * scale,
-                ox + r.right * scale, oy + r.bottom * scale);
+        return new RectF(
+                ox + r.left * scale,
+                oy + r.top * scale,
+                ox + r.right * scale,
+                oy + r.bottom * scale);
     }
 
     private RectF viewToBmp(float x, float y) {
@@ -100,9 +110,12 @@ public class RectSelectView extends View {
     private int hitHandle(float x, float y) {
         if (!hasRect) return 0;
         RectF dr = bmpRectToView(rect);
-        float[][] corners = {{dr.left, dr.top}, {dr.right, dr.top}, {dr.left, dr.bottom}, {dr.right, dr.bottom}};
+        float[][] corners = {
+            {dr.left, dr.top}, {dr.right, dr.top}, {dr.left, dr.bottom}, {dr.right, dr.bottom}
+        };
         for (int i = 0; i < 4; i++) {
-            if (Math.abs(x - corners[i][0]) <= handlePx && Math.abs(y - corners[i][1]) <= handlePx) {
+            if (Math.abs(x - corners[i][0]) <= handlePx
+                    && Math.abs(y - corners[i][1]) <= handlePx) {
                 return i + 3; // 3,4,5,6
             }
         }
@@ -117,10 +130,14 @@ public class RectSelectView extends View {
         rect.right = Math.max(0, Math.min(rect.right, w));
         rect.bottom = Math.max(0, Math.min(rect.bottom, h));
         if (rect.left > rect.right) {
-            float t = rect.left; rect.left = rect.right; rect.right = t;
+            float t = rect.left;
+            rect.left = rect.right;
+            rect.right = t;
         }
         if (rect.top > rect.bottom) {
-            float t = rect.top; rect.top = rect.bottom; rect.bottom = t;
+            float t = rect.top;
+            rect.top = rect.bottom;
+            rect.bottom = t;
         }
     }
 
@@ -130,48 +147,68 @@ public class RectSelectView extends View {
         computeLayout();
         float x = e.getX(), y = e.getY();
         switch (e.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN: {
-                int h = hitHandle(x, y);
-                if (h != 0) {
-                    dragMode = h;
-                } else {
-                    RectF dr = bmpRectToView(rect);
-                    if (hasRect && x >= dr.left - handlePx && x <= dr.right + handlePx
-                            && y >= dr.top - handlePx && y <= dr.bottom + handlePx) {
-                        dragMode = 2; // move
+            case MotionEvent.ACTION_DOWN:
+                {
+                    int h = hitHandle(x, y);
+                    if (h != 0) {
+                        dragMode = h;
                     } else {
-                        dragMode = 1; // draw new
-                        RectF b = viewToBmp(x, y);
-                        rect.set(b.left, b.top, b.left, b.top);
-                        hasRect = true;
+                        RectF dr = bmpRectToView(rect);
+                        if (hasRect
+                                && x >= dr.left - handlePx
+                                && x <= dr.right + handlePx
+                                && y >= dr.top - handlePx
+                                && y <= dr.bottom + handlePx) {
+                            dragMode = 2; // move
+                        } else {
+                            dragMode = 1; // draw new
+                            RectF b = viewToBmp(x, y);
+                            rect.set(b.left, b.top, b.left, b.top);
+                            hasRect = true;
+                        }
                     }
+                    lastX = x;
+                    lastY = y;
+                    return true;
                 }
-                lastX = x; lastY = y;
-                return true;
-            }
-            case MotionEvent.ACTION_MOVE: {
-                float dx = (x - lastX) / scale;
-                float dy = (y - lastY) / scale;
-                if (dragMode == 1) {
-                    RectF b = viewToBmp(x, y);
-                    rect.right = b.left; rect.bottom = b.top;
-                } else if (dragMode == 2) {
-                    rect.left += dx; rect.right += dx; rect.top += dy; rect.bottom += dy;
-                } else if (dragMode >= 3) {
-                    RectF b = viewToBmp(x, y);
-                    float bx = b.left, by = b.top;
-                    int corner = dragMode - 3;
-                    // 0=TL,1=TR,2=BL,3=BR
-                    if (corner == 0) { rect.left = bx; rect.top = by; }
-                    else if (corner == 1) { rect.right = bx; rect.top = by; }
-                    else if (corner == 2) { rect.left = bx; rect.bottom = by; }
-                    else { rect.right = bx; rect.bottom = by; }
+            case MotionEvent.ACTION_MOVE:
+                {
+                    float dx = (x - lastX) / scale;
+                    float dy = (y - lastY) / scale;
+                    if (dragMode == 1) {
+                        RectF b = viewToBmp(x, y);
+                        rect.right = b.left;
+                        rect.bottom = b.top;
+                    } else if (dragMode == 2) {
+                        rect.left += dx;
+                        rect.right += dx;
+                        rect.top += dy;
+                        rect.bottom += dy;
+                    } else if (dragMode >= 3) {
+                        RectF b = viewToBmp(x, y);
+                        float bx = b.left, by = b.top;
+                        int corner = dragMode - 3;
+                        // 0=TL,1=TR,2=BL,3=BR
+                        if (corner == 0) {
+                            rect.left = bx;
+                            rect.top = by;
+                        } else if (corner == 1) {
+                            rect.right = bx;
+                            rect.top = by;
+                        } else if (corner == 2) {
+                            rect.left = bx;
+                            rect.bottom = by;
+                        } else {
+                            rect.right = bx;
+                            rect.bottom = by;
+                        }
+                    }
+                    clampRect();
+                    lastX = x;
+                    lastY = y;
+                    invalidate();
+                    return true;
                 }
-                clampRect();
-                lastX = x; lastY = y;
-                invalidate();
-                return true;
-            }
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 dragMode = 0;

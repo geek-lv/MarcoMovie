@@ -48,9 +48,7 @@ public class SyncQrActivity extends Activity {
 
         try {
             String ip = PhoneConfigDialog.lanAddress();
-            server =
-                    new ConfigSyncServer(
-                            json -> ui.post(() -> applyConfig(json)));
+            server = new ConfigSyncServer(json -> ui.post(() -> applyConfig(json)));
             String address = server.address(ip);
 
             int size = dp(220);
@@ -111,8 +109,7 @@ public class SyncQrActivity extends Activity {
     }
 
     private Bitmap makeQr(String text, int size) throws Exception {
-        BitMatrix matrix =
-                new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size);
+        BitMatrix matrix = new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size);
         int[] px = new int[size * size];
         for (int y = 0; y < size; y++)
             for (int x = 0; x < size; x++)

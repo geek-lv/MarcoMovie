@@ -34,18 +34,19 @@ public class AdSkipController {
     private SherpaKwsEngine engine;
     private volatile SeekHandler seekHandler;
     private volatile boolean inited = false;
+
     /**
      * 引擎是后台异步加载的，而播放器往往几百毫秒就 prepared。若不记住这次起播，
      * {@code onPlaybackStart} 会因 {@code !inited} 被直接丢弃，状态机永远停在 IDLE，
      * 表现为「引擎就绪但一次都不检测」。init 完成后据此补一次 start。
      */
     private volatile boolean pendingStart = false;
+
     private volatile long pendingStartPositionMs = 0;
     private final java.util.concurrent.atomic.AtomicInteger tapCount =
             new java.util.concurrent.atomic.AtomicInteger();
 
-    private AdSkipController() {
-    }
+    private AdSkipController() {}
 
     public static AdSkipController get() {
         if (instance == null) {
@@ -71,30 +72,47 @@ public class AdSkipController {
                 // 诊断 wav 落到应用私有缓存，普通应用对 /data/local/tmp 无写权限
                 AdSkipStateMachine.setDiagnosticDir(
                         new java.io.File(context.getCacheDir(), "adskip"));
-                Log.i(TAG, "init: 配置 enabled=" + AdSkipConfig.isEnabled()
-                        + " 时长=" + AdSkipConfig.getSkipMillis() + "ms"
-                        + " 关键词数=" + AdSkipConfig.getKeywordCount()
-                        + " 关键词=" + AdSkipConfig.getKeywordList());
+                Log.i(
+                        TAG,
+                        "init: 配置 enabled="
+                                + AdSkipConfig.isEnabled()
+                                + " 时长="
+                                + AdSkipConfig.getSkipMillis()
+                                + "ms"
+                                + " 关键词数="
+                                + AdSkipConfig.getKeywordCount()
+                                + " 关键词="
+                                + AdSkipConfig.getKeywordList());
                 engine = SherpaKwsEngine.get();
                 engine.init(context);
                 Log.i(TAG, "init: 引擎本体 ready=" + engine.isReadyRaw());
                 engine.applyKeywords();
                 Log.i(TAG, "init: 引擎含流 ready=" + engine.isReady());
-                machine.attach(engine, new AdSkipStateMachine.Callback() {
-                    @Override
-                    public void onAdDetected(long fromMs, long toMs, String keyword) {
-                        Log.i(TAG, ">>> 命中广告: 关键词=[" + keyword + "] 从 " + fromMs + "ms 跳到 " + toMs + "ms");
-                        SeekHandler handler = seekHandler;
-                        if (handler == null) {
-                            Log.w(TAG, ">>> 命中但 SeekHandler 为空，无法跳转！");
-                        } else {
-                            handler.onAdSkipped(fromMs, toMs, keyword);
-                            handler.seekTo(toMs);
-                        }
-                        // 以"程序化跳转"通知状态机：重置时钟但保留已跳区间，保证幂等
-                        machine.onSeekTo(toMs, false);
-                    }
-                });
+                machine.attach(
+                        engine,
+                        new AdSkipStateMachine.Callback() {
+                            @Override
+                            public void onAdDetected(long fromMs, long toMs, String keyword) {
+                                Log.i(
+                                        TAG,
+                                        ">>> 命中广告: 关键词=["
+                                                + keyword
+                                                + "] 从 "
+                                                + fromMs
+                                                + "ms 跳到 "
+                                                + toMs
+                                                + "ms");
+                                SeekHandler handler = seekHandler;
+                                if (handler == null) {
+                                    Log.w(TAG, ">>> 命中但 SeekHandler 为空，无法跳转！");
+                                } else {
+                                    handler.onAdSkipped(fromMs, toMs, keyword);
+                                    handler.seekTo(toMs);
+                                }
+                                // 以"程序化跳转"通知状态机：重置时钟但保留已跳区间，保证幂等
+                                machine.onSeekTo(toMs, false);
+                            }
+                        });
                 inited = true;
                 // 补做加载期间发生过的起播 / 换集，否则首集永远不会被识别。
                 if (pendingStart) {
@@ -124,9 +142,14 @@ public class AdSkipController {
         // 注意：这里不看 enabled。播放器实例在换集时会复用，buildAudioSink 不会再次执行，
         // 若此刻因"功能未开启"返回 null，探针将永久缺失，用户之后在设置里打开功能也无法生效。
         // 探针本身只是透传 + 旁路拷贝，开销可忽略；是否真正识别由状态机根据 enabled 决定。
-        Log.i(TAG, "createTapProcessor: 挂载探针 enabled=" + AdSkipConfig.isEnabled()
-                + " inited=" + inited
-                + " engineRawReady=" + (engine != null && engine.isReadyRaw()));
+        Log.i(
+                TAG,
+                "createTapProcessor: 挂载探针 enabled="
+                        + AdSkipConfig.isEnabled()
+                        + " inited="
+                        + inited
+                        + " engineRawReady="
+                        + (engine != null && engine.isReadyRaw()));
         tapCount.incrementAndGet();
         return new AdSkipAudioProcessor(machine);
     }

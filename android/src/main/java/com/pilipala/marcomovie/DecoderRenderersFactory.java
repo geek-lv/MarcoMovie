@@ -91,9 +91,7 @@ final class DecoderRenderersFactory extends DefaultRenderersFactory {
      */
     @Override
     protected androidx.media3.exoplayer.audio.AudioSink buildAudioSink(
-            Context context,
-            boolean enableFloatOutput,
-            boolean enableAudioTrackPlaybackParams) {
+            Context context, boolean enableFloatOutput, boolean enableAudioTrackPlaybackParams) {
         try {
             androidx.media3.common.audio.AudioProcessor tap =
                     com.pilipala.marcomovie.adskip.AdSkipController.get().createTapProcessor();

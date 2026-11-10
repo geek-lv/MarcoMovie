@@ -1321,8 +1321,10 @@ final class MobileShell {
                                             }
                                         }
                                         if (list.videos.isEmpty() && !cats.isEmpty()) {
-                                            list = Cms.listing(
-                                                    eng.category(cats.get(0).id, 1), siteSnapshot);
+                                            list =
+                                                    Cms.listing(
+                                                            eng.category(cats.get(0).id, 1),
+                                                            siteSnapshot);
                                         }
                                         HomeScreen.Snapshot saved =
                                                 new HomeScreen.Snapshot(
@@ -3119,9 +3121,7 @@ final class MobileShell {
                                     ? "播放、解码与字幕"
                                     : settingsSubPage == 3
                                             ? "界面外观与偏好"
-                                            : settingsSubPage == 6
-                                                    ? "智能跳过与内容过滤"
-                                                    : "备份、更新与诊断";
+                                            : settingsSubPage == 6 ? "智能跳过与内容过滤" : "备份、更新与诊断";
             TextView subTitle = a.text(subTitleText, 20, Color.WHITE);
             subTitle.setTypeface(null, Typeface.BOLD);
             topNav.addView(subTitle, new LinearLayout.LayoutParams(0, -2, 1));

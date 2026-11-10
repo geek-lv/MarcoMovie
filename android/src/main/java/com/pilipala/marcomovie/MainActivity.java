@@ -573,8 +573,7 @@ public final class MainActivity extends Activity {
                         ui.post(
                                 () -> {
                                     MoviePlayer p = player;
-                                    if (p != null && prepared)
-                                        p.seekToFromAdSkip((int) positionMs);
+                                    if (p != null && prepared) p.seekToFromAdSkip((int) positionMs);
                                 });
                     }
 
@@ -745,6 +744,7 @@ public final class MainActivity extends Activity {
      * —— 表现就是「横屏后导航栏停靠右侧，转回竖屏不会回到底部」。
      */
     private boolean windowSizeWatcherAttached;
+
     private boolean lastPortraitKnown;
     private boolean lastPortraitLayout;
 

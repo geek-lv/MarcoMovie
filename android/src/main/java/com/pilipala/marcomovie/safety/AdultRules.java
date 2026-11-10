@@ -30,9 +30,8 @@ public final class AdultRules {
      * 成人**专有**分类词：正规影视站不会拿它当分类名。出现即强证据。
      */
     private static final String[] ADULT_ONLY_WORDS = {
-            "福利视频", "福利片", "色情", "成人", "里番", "裏番",
-            "无码", "無碼", "有码", "有碼", "自拍", "偷拍",
-            "约啪", "約啪", "约炮", "約炮", "探花", "大尺度", "网黄", "番号"
+        "福利视频", "福利片", "色情", "成人", "里番", "裏番", "无码", "無碼", "有码", "有碼", "自拍", "偷拍", "约啪", "約啪", "约炮",
+        "約炮", "探花", "大尺度", "网黄", "番号"
     };
 
     /**
@@ -43,7 +42,7 @@ public final class AdultRules {
      * 如果当强词用会误杀大半正常站点。
      */
     private static final String[] AMBIGUOUS_TYPE_WORDS = {
-            "伦理", "倫理", "福利", "情色", "三级", "三級", "写真", "寫真"
+        "伦理", "倫理", "福利", "情色", "三级", "三級", "写真", "寫真"
     };
 
     /** 条目级判定用的合并词表：条目分类叫「伦理片」时仍然值得拦 */
@@ -51,21 +50,37 @@ public final class AdultRules {
 
     /** 厂牌词：出现在片名、备注或来源名里即判定成人 */
     private static final String[] BRAND_WORDS = {
-            "麻豆", "蜜桃传媒", "天美传媒", "果冻传媒", "乌鸦传媒", "精东", "swag",
-            "91制片", "91porn", "含羞草", "杏吧", "一本道", "东京热", "javbus", "javlibrary",
-            "missav", "madou", "fc2", "hentai", "国产自拍"
+        "麻豆",
+        "蜜桃传媒",
+        "天美传媒",
+        "果冻传媒",
+        "乌鸦传媒",
+        "精东",
+        "swag",
+        "91制片",
+        "91porn",
+        "含羞草",
+        "杏吧",
+        "一本道",
+        "东京热",
+        "javbus",
+        "javlibrary",
+        "missav",
+        "madou",
+        "fc2",
+        "hentai",
+        "国产自拍"
     };
 
     /** 站点分类软命中词：单独不足以定性，但占比高说明整站以成人内容为主 */
     private static final String[] SITE_SOFT_WORDS = {
-            "激情", "主播", "网红", "人妻", "熟女", "调教", "私房", "情欲", "慾", "一夜情",
-            "艳照", "裸", "淫"
+        "激情", "主播", "网红", "人妻", "熟女", "调教", "私房", "情欲", "慾", "一夜情", "艳照", "裸", "淫"
     };
 
     /** 简介露骨词：只在详情页判定，且可由用户关闭「简介关键词」开关 */
     private static final String[] CONTENT_WORDS = {
-            "做爱", "性爱", "性交", "口交", "肛交", "自慰", "呻吟", "淫荡", "淫叫", "强奸",
-            "迷奸", "内射", "中出", "无套", "露点", "全裸", "性器官", "勃起", "射精", "淫秽"
+        "做爱", "性爱", "性交", "口交", "肛交", "自慰", "呻吟", "淫荡", "淫叫", "强奸",
+        "迷奸", "内射", "中出", "无套", "露点", "全裸", "性器官", "勃起", "射精", "淫秽"
     };
 
     /**
@@ -73,26 +88,31 @@ public final class AdultRules {
      * 用「包含」匹配，命中后整条直接放行。
      */
     private static final String[] EXEMPT_TITLES = {
-            "av帝王", "全裸导演", "性爱自修室", "下辈子我再好好过",
-            // 最严档下只剩「极品」「美女」这类词的正经片，靠白名单兜住
-            "极品家丁", "美女与野兽", "美女与野兽2017"
+        "av帝王",
+        "全裸导演",
+        "性爱自修室",
+        "下辈子我再好好过",
+        // 最严档下只剩「极品」「美女」这类词的正经片，靠白名单兜住
+        "极品家丁",
+        "美女与野兽",
+        "美女与野兽2017"
     };
 
     /**
      * 番号样式：两到五个大写字母 + 分隔符 + 数字，或 FC2-PPV 这类。
      * 前面不能紧跟字母数字（避免命中 "H264-10" 这种片段中间），后面同理。
      */
-    private static final Pattern NUMBER_PATTERN = Pattern.compile(
-            "(?<![A-Z0-9])(?:FC2[-_ ]?PPV[-_ ]?\\d{3,8}|[A-Z]{2,5}[-_]\\d{2,5})(?![A-Z0-9])");
+    private static final Pattern NUMBER_PATTERN =
+            Pattern.compile(
+                    "(?<![A-Z0-9])(?:FC2[-_ ]?PPV[-_ ]?\\d{3,8}|[A-Z]{2,5}[-_]\\d{2,5})(?![A-Z0-9])");
 
     /** 番号正则的误伤拦截：编码/格式类前缀不是番号 */
     private static final String[] NUMBER_BLOCKLIST = {
-            "HD", "FHD", "UHD", "SD", "BD", "DVD", "WEB", "DL", "HDR", "AVC", "HEVC",
-            "MKV", "MP4", "MV", "OP", "ED", "SP", "PV", "CM", "CD", "TS", "TC"
+        "HD", "FHD", "UHD", "SD", "BD", "DVD", "WEB", "DL", "HDR", "AVC", "HEVC",
+        "MKV", "MP4", "MV", "OP", "ED", "SP", "PV", "CM", "CD", "TS", "TC"
     };
 
-    private AdultRules() {
-    }
+    private AdultRules() {}
 
     /** 条目判定（搜索结果、收藏、历史都可用）：返回命中原因，null 表示放行 */
     /**
@@ -139,8 +159,14 @@ public final class AdultRules {
         return null;
     }
 
-    public static String matchItem(String name, String type, String remarks, String area,
-                                   String description, boolean numberRegex, List<String> extra) {
+    public static String matchItem(
+            String name,
+            String type,
+            String remarks,
+            String area,
+            String description,
+            boolean numberRegex,
+            List<String> extra) {
         // 判定强度固定为最严档：低俗词单个即拦
         return matchItem(name, type, remarks, area, description, numberRegex, extra, true);
     }
@@ -148,16 +174,24 @@ public final class AdultRules {
     /**
      * @param strictSuggestive 严格模式：低俗倾向词命中 1 个就拦（默认要 2 个不同词）
      */
-    public static String matchItem(String name, String type, String remarks, String area,
-                                   String description, boolean numberRegex, List<String> extra,
-                                   boolean strictSuggestive) {
+    public static String matchItem(
+            String name,
+            String type,
+            String remarks,
+            String area,
+            String description,
+            boolean numberRegex,
+            List<String> extra,
+            boolean strictSuggestive) {
         String title = clean(name);
         if (isExempt(title)) return null;
         String typeText = clean(type);
         // 非严格模式：国内剧集分类里的「家庭伦理」「都市伦理」是正经题材，先把这几个词组摘掉再判。
         // 最严模式不摘，「伦理」一律拦（用户明确要求宁可错杀）。
-        String typeProbe = strictSuggestive ? typeText
-                : typeText.replace("家庭伦理", "").replace("都市伦理", "").replace("伦理剧", "");
+        String typeProbe =
+                strictSuggestive
+                        ? typeText
+                        : typeText.replace("家庭伦理", "").replace("都市伦理", "").replace("伦理剧", "");
         String reason = firstHit(TYPE_WORDS, typeProbe, extra);
         if (reason != null) return "分类含「" + reason + "」";
         String text = title + "|" + typeText + "|" + clean(remarks) + "|" + clean(area);
@@ -242,15 +276,12 @@ public final class AdultRules {
      * 严格模式下阈值降到 1，由用户自己选。
      */
     private static final String[] SUGGESTIVE_WORDS = {
-            "勾引", "誘惑", "诱惑", "偷情", "偷歡", "出轨", "出軌", "情欲", "情慾", "欲火",
-            "湿身", "濕身", "春宵", "禁恋", "禁戀", "不伦", "不倫", "艳遇", "艷遇", "魅惑",
-            "嫂子", "小姨子", "继母", "繼母", "空姐", "女上司", "老板娘", "老闆娘",
-            "少妇", "少婦", "人妻", "熟女", "尤物", "风骚", "風騷", "浪荡", "浪蕩",
-            "呻吟", "娇喘", "嬌喘", "床戏", "床戲", "私密", "私房", "走光", "艳照", "艷照",
-            "销魂", "銷魂", "极品", "極品", "美女", "辣妹", "嫩模", "性感", "内衣", "內衣",
-            "丝袜", "絲襪", "制服", "调教", "調教", "驯服", "馴服",
-            "裸聊", "裸舞", "艳舞", "艷舞", "艳星", "艷星", "福利姬", "房事", "情事",
-            "偷腥", "春药", "春藥", "调情", "調情", "床伴", "炮友", "援交", "包养", "包養"
+        "勾引", "誘惑", "诱惑", "偷情", "偷歡", "出轨", "出軌", "情欲", "情慾", "欲火", "湿身", "濕身", "春宵", "禁恋", "禁戀",
+        "不伦", "不倫", "艳遇", "艷遇", "魅惑", "嫂子", "小姨子", "继母", "繼母", "空姐", "女上司", "老板娘", "老闆娘", "少妇",
+        "少婦", "人妻", "熟女", "尤物", "风骚", "風騷", "浪荡", "浪蕩", "呻吟", "娇喘", "嬌喘", "床戏", "床戲", "私密", "私房",
+        "走光", "艳照", "艷照", "销魂", "銷魂", "极品", "極品", "美女", "辣妹", "嫩模", "性感", "内衣", "內衣", "丝袜", "絲襪",
+        "制服", "调教", "調教", "驯服", "馴服", "裸聊", "裸舞", "艳舞", "艷舞", "艳星", "艷星", "福利姬", "房事", "情事", "偷腥",
+        "春药", "春藥", "调情", "調情", "床伴", "炮友", "援交", "包养", "包養"
     };
 
     /**
@@ -272,6 +303,7 @@ public final class AdultRules {
      * 分类清单的洁净度分级
      */
     public static final int CLASS_CLEAN = 0;
+
     public static final int CLASS_SUSPICIOUS = 1;
     public static final int CLASS_ADULT = 2;
 
@@ -327,13 +359,14 @@ public final class AdultRules {
 
         if (strict) {
             if (adultOnly >= 1) {
-                if (detail != null) detail.add("分类含成人/边缘分类「" + adultWords.iterator().next()
-                        + "」（共 " + size + " 个分类）");
+                if (detail != null)
+                    detail.add(
+                            "分类含成人/边缘分类「" + adultWords.iterator().next() + "」（共 " + size + " 个分类）");
                 return CLASS_ADULT;
             }
             if (soft >= 1) {
-                if (detail != null) detail.add("分类含低俗分类「" + adultWords.iterator().next()
-                        + "」（共 " + size + " 个分类）");
+                if (detail != null)
+                    detail.add("分类含低俗分类「" + adultWords.iterator().next() + "」（共 " + size + " 个分类）");
                 return CLASS_ADULT;
             }
             if (detail != null) detail.add("分类清单未见成人分类（共 " + size + " 个分类）");
@@ -345,7 +378,8 @@ public final class AdultRules {
             return CLASS_ADULT;
         }
         if (adultOnly == 1 && adultOnly + ambiguous >= 2) {
-            if (detail != null) detail.add("成人专有分类与边缘分类并存（" + (adultOnly + ambiguous) + "/" + size + "）");
+            if (detail != null)
+                detail.add("成人专有分类与边缘分类并存（" + (adultOnly + ambiguous) + "/" + size + "）");
             return CLASS_ADULT;
         }
         if (adultOnly == 1) {

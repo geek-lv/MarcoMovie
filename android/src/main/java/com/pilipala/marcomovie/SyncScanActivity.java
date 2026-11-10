@@ -134,8 +134,7 @@ public class SyncScanActivity extends Activity
     }
 
     @Override
-    public void onRequestPermissionsResult(
-            int req, String[] perms, int[] res) {
+    public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         if (req == REQ_CAM
                 && perms.length > 0
                 && res.length > 0
@@ -300,11 +299,7 @@ public class SyncScanActivity extends Activity
                                             syncing = false;
                                             Toast.makeText(
                                                             this,
-                                                            (ok
-                                                                            ? "已同步到电视："
-                                                                            : "同步失败("
-                                                                                    + code
-                                                                                    + ")：")
+                                                            (ok ? "已同步到电视：" : "同步失败(" + code + ")：")
                                                                     + msg,
                                                             Toast.LENGTH_LONG)
                                                     .show();

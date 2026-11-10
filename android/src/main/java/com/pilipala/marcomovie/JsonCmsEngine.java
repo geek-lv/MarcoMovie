@@ -15,6 +15,7 @@ public final class JsonCmsEngine implements SourceEngine {
 
     /** api 地址 → 类目树缓存：一次会话内避免每次点分类都回源拉 class */
     private static final java.util.Map<String, Tree> TREES = new java.util.HashMap<>();
+
     private static final long TREE_TTL_MS = 10 * 60 * 1000L;
 
     /** 父类目合并时单页最多取多少条，够一屏 3 列网格再翻页即可 */

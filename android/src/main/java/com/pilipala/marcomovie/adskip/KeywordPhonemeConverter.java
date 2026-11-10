@@ -26,10 +26,8 @@ public final class KeywordPhonemeConverter {
 
     /** 声母表，顺序必须保证 zh/ch/sh 在 z/c/s 之前，以实现最长匹配 */
     private static final String[] INITIALS = {
-            "zh", "ch", "sh",
-            "b", "p", "m", "f", "d", "t", "n", "l",
-            "g", "k", "h", "j", "q", "x",
-            "r", "z", "c", "s", "y", "w"
+        "zh", "ch", "sh", "b", "p", "m", "f", "d", "t", "n", "l", "g", "k", "h", "j", "q", "x", "r",
+        "z", "c", "s", "y", "w"
     };
 
     /**
@@ -40,16 +38,15 @@ public final class KeywordPhonemeConverter {
      * 输出的第三声是 breve（ă U+0103）而非 caron，与词表不符，因此这里自行转换。
      */
     private static final String[][] TONE_VOWELS = {
-            {"ā", "á", "ǎ", "à"},
-            {"ō", "ó", "ǒ", "ò"},
-            {"ē", "é", "ě", "è"},
-            {"ī", "í", "ǐ", "ì"},
-            {"ū", "ú", "ǔ", "ù"},
-            {"ǖ", "ǘ", "ǚ", "ǜ"},
+        {"ā", "á", "ǎ", "à"},
+        {"ō", "ó", "ǒ", "ò"},
+        {"ē", "é", "ě", "è"},
+        {"ī", "í", "ǐ", "ì"},
+        {"ū", "ú", "ǔ", "ù"},
+        {"ǖ", "ǘ", "ǚ", "ǜ"},
     };
 
-    private KeywordPhonemeConverter() {
-    }
+    private KeywordPhonemeConverter() {}
 
     /**
      * 把单个中文关键词转成引擎可接受的音素行。
@@ -175,14 +172,21 @@ public final class KeywordPhonemeConverter {
     /** 元音对应的行号：a=0 o=1 e=2 i=3 u=4 ü=5，非元音返回 -1 */
     private static int vowelRow(char c) {
         switch (c) {
-            case 'a': return 0;
-            case 'o': return 1;
-            case 'e': return 2;
-            case 'i': return 3;
-            case 'u': return 4;
+            case 'a':
+                return 0;
+            case 'o':
+                return 1;
+            case 'e':
+                return 2;
+            case 'i':
+                return 3;
+            case 'u':
+                return 4;
             case 'ü':
-            case 'v': return 5;
-            default: return -1;
+            case 'v':
+                return 5;
+            default:
+                return -1;
         }
     }
 

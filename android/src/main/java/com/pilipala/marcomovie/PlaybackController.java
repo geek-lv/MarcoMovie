@@ -1146,8 +1146,11 @@ final class PlaybackController {
                                                                 if (ticket != a.generation) return;
                                                                 a.prepared = true;
                                                                 // 起播：锚定音频时钟。引擎若仍在后台加载，控制器会记住并在就绪后补做
-                                                                com.pilipala.marcomovie.adskip.AdSkipController.get()
-                                                                        .onPlaybackStart(mp.getCurrentPosition());
+                                                                com.pilipala.marcomovie.adskip
+                                                                        .AdSkipController.get()
+                                                                        .onPlaybackStart(
+                                                                                mp
+                                                                                        .getCurrentPosition());
                                                                 if (a.playerChrome != null)
                                                                     a.playerChrome.setLoading(
                                                                             false);

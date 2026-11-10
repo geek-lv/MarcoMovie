@@ -55,10 +55,8 @@ public final class QrAdBlurEffect implements GlEffect {
     }
 
     private final Context appContext;
-    @Nullable
-    private QrAdBlurShaderProgram program;
-    @Nullable
-    private CaptureListener captureListener;
+    @Nullable private QrAdBlurShaderProgram program;
+    @Nullable private CaptureListener captureListener;
 
     public QrAdBlurEffect(Context context) {
         this.appContext = context.getApplicationContext();
@@ -85,104 +83,108 @@ public final class QrAdBlurEffect implements GlEffect {
     /** 内部 GPU 程序：BaseGlShaderProgram 负责输出纹理池、FBO 绑定与输入/输出帧流转。 */
     @UnstableApi
     private static final class QrAdBlurShaderProgram extends BaseGlShaderProgram {
-        private static final int MAX_TMPL = 8;   // 最多加载的特征图数
-        private static final int CAP_MAX = 360;  // 截图捕获最大边长（供框选精度）
+        private static final int MAX_TMPL = 8; // 最多加载的特征图数
+        private static final int CAP_MAX = 360; // 截图捕获最大边长（供框选精度）
 
         // 全屏四边形（TRIANGLE_STRIP），aPosition 与 aTextureCoord 共用同一套坐标
         private static final float[] POS = {-1, -1, 1, -1, -1, 1, 1, 1};
         private static final float[] TEX = {0, 0, 1, 0, 0, 1, 1, 1};
 
-        private static final String VERT = ""
-                + "attribute vec4 aPosition;\n"
-                + "attribute vec2 aTextureCoord;\n"
-                + "varying vec2 vTexCoord;\n"
-                + "void main() {\n"
-                + "  gl_Position = aPosition;\n"
-                + "  vTexCoord = aTextureCoord;\n"
-                + "}\n";
+        private static final String VERT =
+                ""
+                        + "attribute vec4 aPosition;\n"
+                        + "attribute vec2 aTextureCoord;\n"
+                        + "varying vec2 vTexCoord;\n"
+                        + "void main() {\n"
+                        + "  gl_Position = aPosition;\n"
+                        + "  vTexCoord = aTextureCoord;\n"
+                        + "}\n";
 
         // 直通拷贝（降采样 / 透传）
-        private static final String COPY_FRAG = ""
-                + "precision mediump float;\n"
-                + "varying vec2 vTexCoord;\n"
-                + "uniform sampler2D uTex;\n"
-                + "void main() {\n"
-                + "  gl_FragColor = texture2D(uTex, vTexCoord);\n"
-                + "}\n";
+        private static final String COPY_FRAG =
+                ""
+                        + "precision mediump float;\n"
+                        + "varying vec2 vTexCoord;\n"
+                        + "uniform sampler2D uTex;\n"
+                        + "void main() {\n"
+                        + "  gl_FragColor = texture2D(uTex, vTexCoord);\n"
+                        + "}\n";
 
         // 归一化 SAD 模板匹配：输出分数图（R 通道 = 平均绝对差 / 255，[0,1]，越低越像）
-        private static final String MATCH_FRAG = ""
-                + "precision mediump float;\n"
-                + "varying vec2 vTexCoord;\n"
-                + "uniform sampler2D uInput;\n"
-                + "uniform sampler2D uTmpl;\n"
-                + "uniform vec2 uFrameSize;\n"
-                + "uniform vec2 uTmplSize;\n"
-                + "uniform float uScoreScale;\n"
-                + "const int MAXT = 64;\n"
-                + "void main() {\n"
-                + "  vec2 scorePx = vTexCoord * (uFrameSize - uTmplSize + 1.0);\n"
-                + "  vec2 topLeft = scorePx / uFrameSize;\n"
-                + "  vec2 texel = 1.0 / uFrameSize;\n"
-                + "  float sad = 0.0;\n"
-                + "  for (int j = 0; j < MAXT; j++) {\n"
-                + "    if (j >= int(uTmplSize.y)) break;\n"
-                + "    for (int i = 0; i < MAXT; i++) {\n"
-                + "      if (i >= int(uTmplSize.x)) break;\n"
-                + "      vec2 off = vec2(float(i), float(j)) * texel;\n"
-                + "      vec3 f = texture2D(uInput, topLeft + off).rgb;\n"
-                + "      vec2 tco = (vec2(float(i), float(j)) + 0.5) / uTmplSize;\n"
-                + "      vec3 t = texture2D(uTmpl, tco).rgb;\n"
-                + "      sad += abs(f.r - t.r) + abs(f.g - t.g) + abs(f.b - t.b);\n"
-                + "    }\n"
-                + "  }\n"
-                + "  float norm = sad * uScoreScale / 255.0;\n"
-                + "  gl_FragColor = vec4(norm, 0.0, 0.0, 1.0);\n"
-                + "}\n";
+        private static final String MATCH_FRAG =
+                ""
+                        + "precision mediump float;\n"
+                        + "varying vec2 vTexCoord;\n"
+                        + "uniform sampler2D uInput;\n"
+                        + "uniform sampler2D uTmpl;\n"
+                        + "uniform vec2 uFrameSize;\n"
+                        + "uniform vec2 uTmplSize;\n"
+                        + "uniform float uScoreScale;\n"
+                        + "const int MAXT = 64;\n"
+                        + "void main() {\n"
+                        + "  vec2 scorePx = vTexCoord * (uFrameSize - uTmplSize + 1.0);\n"
+                        + "  vec2 topLeft = scorePx / uFrameSize;\n"
+                        + "  vec2 texel = 1.0 / uFrameSize;\n"
+                        + "  float sad = 0.0;\n"
+                        + "  for (int j = 0; j < MAXT; j++) {\n"
+                        + "    if (j >= int(uTmplSize.y)) break;\n"
+                        + "    for (int i = 0; i < MAXT; i++) {\n"
+                        + "      if (i >= int(uTmplSize.x)) break;\n"
+                        + "      vec2 off = vec2(float(i), float(j)) * texel;\n"
+                        + "      vec3 f = texture2D(uInput, topLeft + off).rgb;\n"
+                        + "      vec2 tco = (vec2(float(i), float(j)) + 0.5) / uTmplSize;\n"
+                        + "      vec3 t = texture2D(uTmpl, tco).rgb;\n"
+                        + "      sad += abs(f.r - t.r) + abs(f.g - t.g) + abs(f.b - t.b);\n"
+                        + "    }\n"
+                        + "  }\n"
+                        + "  float norm = sad * uScoreScale / 255.0;\n"
+                        + "  gl_FragColor = vec4(norm, 0.0, 0.0, 1.0);\n"
+                        + "}\n";
 
         // 分离高斯（沿 uDir 方向 9 抽头），H 与 V 共用此 shader
-        private static final String BLUR_FRAG = ""
-                + "precision mediump float;\n"
-                + "varying vec2 vTexCoord;\n"
-                + "uniform sampler2D uTex;\n"
-                + "uniform vec2 uDir;\n"
-                + "void main() {\n"
-                + "  float w0 = 0.227027, w1 = 0.1945946, w2 = 0.1216216, w3 = 0.054054, w4 = 0.016216;\n"
-                + "  vec3 s = texture2D(uTex, vTexCoord).rgb * w0;\n"
-                + "  s += texture2D(uTex, vTexCoord + uDir * 1.0).rgb * w1;\n"
-                + "  s += texture2D(uTex, vTexCoord - uDir * 1.0).rgb * w1;\n"
-                + "  s += texture2D(uTex, vTexCoord + uDir * 2.0).rgb * w2;\n"
-                + "  s += texture2D(uTex, vTexCoord - uDir * 2.0).rgb * w2;\n"
-                + "  s += texture2D(uTex, vTexCoord + uDir * 3.0).rgb * w3;\n"
-                + "  s += texture2D(uTex, vTexCoord - uDir * 3.0).rgb * w3;\n"
-                + "  s += texture2D(uTex, vTexCoord + uDir * 4.0).rgb * w4;\n"
-                + "  s += texture2D(uTex, vTexCoord - uDir * 4.0).rgb * w4;\n"
-                + "  gl_FragColor = vec4(s, 1.0);\n"
-                + "}\n";
+        private static final String BLUR_FRAG =
+                ""
+                        + "precision mediump float;\n"
+                        + "varying vec2 vTexCoord;\n"
+                        + "uniform sampler2D uTex;\n"
+                        + "uniform vec2 uDir;\n"
+                        + "void main() {\n"
+                        + "  float w0 = 0.227027, w1 = 0.1945946, w2 = 0.1216216, w3 = 0.054054, w4 = 0.016216;\n"
+                        + "  vec3 s = texture2D(uTex, vTexCoord).rgb * w0;\n"
+                        + "  s += texture2D(uTex, vTexCoord + uDir * 1.0).rgb * w1;\n"
+                        + "  s += texture2D(uTex, vTexCoord - uDir * 1.0).rgb * w1;\n"
+                        + "  s += texture2D(uTex, vTexCoord + uDir * 2.0).rgb * w2;\n"
+                        + "  s += texture2D(uTex, vTexCoord - uDir * 2.0).rgb * w2;\n"
+                        + "  s += texture2D(uTex, vTexCoord + uDir * 3.0).rgb * w3;\n"
+                        + "  s += texture2D(uTex, vTexCoord - uDir * 3.0).rgb * w3;\n"
+                        + "  s += texture2D(uTex, vTexCoord + uDir * 4.0).rgb * w4;\n"
+                        + "  s += texture2D(uTex, vTexCoord - uDir * 4.0).rgb * w4;\n"
+                        + "  gl_FragColor = vec4(s, 1.0);\n"
+                        + "}\n";
 
         // 合成：矩形内用模糊、矩形外透传清晰，边缘羽化
-        private static final String MIX_FRAG = ""
-                + "precision mediump float;\n"
-                + "varying vec2 vTexCoord;\n"
-                + "uniform sampler2D uSharp;\n"
-                + "uniform sampler2D uBlurred;\n"
-                + "uniform vec2 uFrameSize;\n"
-                + "uniform vec4 uRect;\n"
-                + "uniform float uFeather;\n"
-                + "void main() {\n"
-                + "  vec3 sharp = texture2D(uSharp, vTexCoord).rgb;\n"
-                + "  vec3 blurred = texture2D(uBlurred, vTexCoord).rgb;\n"
-                + "  float dx = min(vTexCoord.x - uRect.x, (uRect.x + uRect.z) - vTexCoord.x);\n"
-                + "  float dy = min(vTexCoord.y - uRect.y, (uRect.y + uRect.w) - vTexCoord.y);\n"
-                + "  float edge = min(dx, dy);\n"
-                + "  float f = uFeather * min(uFrameSize.x, uFrameSize.y) + 1e-4;\n"
-                + "  float blend = clamp(1.0 - smoothstep(0.0, f, edge), 0.0, 1.0);\n"
-                + "  gl_FragColor = vec4(mix(sharp, blurred, blend), 1.0);\n"
-                + "}\n";
+        private static final String MIX_FRAG =
+                ""
+                        + "precision mediump float;\n"
+                        + "varying vec2 vTexCoord;\n"
+                        + "uniform sampler2D uSharp;\n"
+                        + "uniform sampler2D uBlurred;\n"
+                        + "uniform vec2 uFrameSize;\n"
+                        + "uniform vec4 uRect;\n"
+                        + "uniform float uFeather;\n"
+                        + "void main() {\n"
+                        + "  vec3 sharp = texture2D(uSharp, vTexCoord).rgb;\n"
+                        + "  vec3 blurred = texture2D(uBlurred, vTexCoord).rgb;\n"
+                        + "  float dx = min(vTexCoord.x - uRect.x, (uRect.x + uRect.z) - vTexCoord.x);\n"
+                        + "  float dy = min(vTexCoord.y - uRect.y, (uRect.y + uRect.w) - vTexCoord.y);\n"
+                        + "  float edge = min(dx, dy);\n"
+                        + "  float f = uFeather * min(uFrameSize.x, uFrameSize.y) + 1e-4;\n"
+                        + "  float blend = clamp(1.0 - smoothstep(0.0, f, edge), 0.0, 1.0);\n"
+                        + "  gl_FragColor = vec4(mix(sharp, blurred, blend), 1.0);\n"
+                        + "}\n";
 
         private final Context appContext;
-        @Nullable
-        private volatile CaptureListener captureListener;
+        @Nullable private volatile CaptureListener captureListener;
         private volatile boolean captureRequested = false;
 
         // 程序
@@ -221,9 +223,8 @@ public final class QrAdBlurEffect implements GlEffect {
 
         // 检测 / 平滑状态
         private int frameIndex = 0;
-        private String loadedSig = "";   // 已加载模板的文件签名，用于热重载
-        @Nullable
-        private float[] lastRect = null; // x,y,w,h 归一化(GL 空间)
+        private String loadedSig = ""; // 已加载模板的文件签名，用于热重载
+        @Nullable private float[] lastRect = null; // x,y,w,h 归一化(GL 空间)
         private int noMatch = 0;
         private static final int MAX_NO_MATCH = 3;
 
@@ -396,16 +397,18 @@ public final class QrAdBlurEffect implements GlEffect {
                     focusFramebufferUsingCurrentContext(tempAFbo, outputW, outputH);
                     GLES20.glViewport(0, 0, outputW, outputH);
                     blurProg.use();
-                    blurProg.setFloatsUniform("uDir",
-                            new float[]{(float) AdBlurConfig.getBlurRadius() / outputW, 0f});
+                    blurProg.setFloatsUniform(
+                            "uDir",
+                            new float[] {(float) AdBlurConfig.getBlurRadius() / outputW, 0f});
                     blurProg.setSamplerTexIdUniform("uTex", inputTexId, 0);
                     blurProg.bindAttributesAndUniforms();
                     GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 
                     // V 模糊: tempA -> tempB
                     focusFramebufferUsingCurrentContext(tempBFbo, outputW, outputH);
-                    blurProg.setFloatsUniform("uDir",
-                            new float[]{0f, (float) AdBlurConfig.getBlurRadius() / outputH});
+                    blurProg.setFloatsUniform(
+                            "uDir",
+                            new float[] {0f, (float) AdBlurConfig.getBlurRadius() / outputH});
                     blurProg.setSamplerTexIdUniform("uTex", tempATex, 0);
                     blurProg.bindAttributesAndUniforms();
                     GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
@@ -415,9 +418,10 @@ public final class QrAdBlurEffect implements GlEffect {
                     mixProg.use();
                     mixProg.setSamplerTexIdUniform("uSharp", inputTexId, 0);
                     mixProg.setSamplerTexIdUniform("uBlurred", tempBTex, 1);
-                    mixProg.setFloatsUniform("uFrameSize", new float[]{outputW, outputH});
-                    mixProg.setFloatsUniform("uRect",
-                            new float[]{lastRect[0], lastRect[1], lastRect[2], lastRect[3]});
+                    mixProg.setFloatsUniform("uFrameSize", new float[] {outputW, outputH});
+                    mixProg.setFloatsUniform(
+                            "uRect",
+                            new float[] {lastRect[0], lastRect[1], lastRect[2], lastRect[3]});
                     mixProg.setFloatUniform("uFeather", AdBlurConfig.getFeather());
                     mixProg.bindAttributesAndUniforms();
                     GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
@@ -459,8 +463,8 @@ public final class QrAdBlurEffect implements GlEffect {
                 matchProg.use();
                 matchProg.setSamplerTexIdUniform("uInput", scaledTex, 0);
                 matchProg.setSamplerTexIdUniform("uTmpl", tmplTex[i], 1);
-                matchProg.setFloatsUniform("uFrameSize", new float[]{scaledW, scaledH});
-                matchProg.setFloatsUniform("uTmplSize", new float[]{tw, th});
+                matchProg.setFloatsUniform("uFrameSize", new float[] {scaledW, scaledH});
+                matchProg.setFloatsUniform("uTmplSize", new float[] {tw, th});
                 matchProg.setFloatUniform("uScoreScale", 1f / (tw * th * 3f));
                 matchProg.bindAttributesAndUniforms();
                 GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
@@ -470,7 +474,8 @@ public final class QrAdBlurEffect implements GlEffect {
                     scoreBuf = ByteBuffer.allocateDirect(n * 4).order(ByteOrder.nativeOrder());
                 }
                 scoreBuf.rewind();
-                GLES20.glReadPixels(0, 0, sw, sh, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, scoreBuf);
+                GLES20.glReadPixels(
+                        0, 0, sw, sh, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, scoreBuf);
 
                 float minV = Float.MAX_VALUE;
                 int minX = 0, minY = 0;
@@ -498,7 +503,7 @@ public final class QrAdBlurEffect implements GlEffect {
                 float w = (float) bestTw / scaledW;
                 float h = (float) bestTh / scaledH;
                 if (lastRect == null) {
-                    lastRect = new float[]{x, y, w, h};
+                    lastRect = new float[] {x, y, w, h};
                 } else {
                     // 帧间 EMA 平滑，抑制抖动
                     final float k = 0.5f;

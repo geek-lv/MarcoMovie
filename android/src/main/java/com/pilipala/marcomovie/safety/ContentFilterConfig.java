@@ -42,20 +42,21 @@ public final class ContentFilterConfig {
 
     /** 标记表的只读缓存（原文 + 解析结果），写入时同步失效 */
     private static volatile String marksRaw;
+
     private static volatile JSONObject marksParsed;
 
     /** 临时解锁截止时间；只存内存，应用重启即失效 */
     private static volatile long unlockUntil;
 
-    private ContentFilterConfig() {
-    }
+    private ContentFilterConfig() {}
 
     public static void init(Context context) {
         if (prefs != null) return;
         synchronized (ContentFilterConfig.class) {
             if (prefs == null && context != null) {
-                prefs = context.getApplicationContext()
-                        .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                prefs =
+                        context.getApplicationContext()
+                                .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             }
         }
     }
@@ -74,8 +75,10 @@ public final class ContentFilterConfig {
         SharedPreferences.Editor editor = p.edit().putBoolean(KEY_ENABLED, enabled);
         if (enabled) {
             // 旧版本的细分开关已废弃，重新开启时顺手清掉残留
-            editor.remove("scan_description").remove("number_regex")
-                    .remove("strict_first_sight").remove("strict_suggestive");
+            editor.remove("scan_description")
+                    .remove("number_regex")
+                    .remove("strict_first_sight")
+                    .remove("strict_suggestive");
         }
         editor.apply();
     }
@@ -110,10 +113,7 @@ public final class ContentFilterConfig {
         SharedPreferences p = prefs;
         if (p == null || pin == null || !pin.matches("\\d{4,6}")) return false;
         String salt = hex(randomBytes(8));
-        p.edit()
-                .putString(KEY_PIN_SALT, salt)
-                .putString(KEY_PIN_HASH, sha256(salt + pin))
-                .apply();
+        p.edit().putString(KEY_PIN_SALT, salt).putString(KEY_PIN_HASH, sha256(salt + pin)).apply();
         unlockUntil = 0;
         return true;
     }

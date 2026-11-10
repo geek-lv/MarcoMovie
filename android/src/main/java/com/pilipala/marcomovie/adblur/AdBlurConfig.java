@@ -13,12 +13,12 @@ public class AdBlurConfig {
 
     private static final String PREFS = "adblur";
     private static final String KEY_ENABLED = "enabled";
-    private static final String KEY_BLUR_RADIUS = "blur_radius";        // 高斯模糊半径(px, 输出分辨率)
-    private static final String KEY_DETECT_EVERY_N = "detect_every_n";  // 每 N 帧检测一次
+    private static final String KEY_BLUR_RADIUS = "blur_radius"; // 高斯模糊半径(px, 输出分辨率)
+    private static final String KEY_DETECT_EVERY_N = "detect_every_n"; // 每 N 帧检测一次
     private static final String KEY_MATCH_THRESHOLD = "match_threshold"; // SAD 均值阈值[0,1]
-    private static final String KEY_SCALE_MAX = "scale_max";            // 检测用降采样最大边长
-    private static final String KEY_FEATHER = "feather";                // 边缘羽化(占短边比例)
-    private static final String KEY_USE_ZXING = "use_zxing";            // 额外用 ZXing 定位二维码
+    private static final String KEY_SCALE_MAX = "scale_max"; // 检测用降采样最大边长
+    private static final String KEY_FEATHER = "feather"; // 边缘羽化(占短边比例)
+    private static final String KEY_USE_ZXING = "use_zxing"; // 额外用 ZXing 定位二维码
 
     public static final int DEFAULT_BLUR_RADIUS = 18;
     public static final int DEFAULT_DETECT_EVERY_N = 6;
@@ -33,8 +33,9 @@ public class AdBlurConfig {
         if (prefs != null) return;
         synchronized (AdBlurConfig.class) {
             if (prefs == null && context != null) {
-                prefs = context.getApplicationContext()
-                        .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+                prefs =
+                        context.getApplicationContext()
+                                .getSharedPreferences(PREFS, Context.MODE_PRIVATE);
             }
         }
     }

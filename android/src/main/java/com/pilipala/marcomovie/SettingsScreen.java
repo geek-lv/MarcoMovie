@@ -118,23 +118,22 @@ final class SettingsScreen {
         link(
                 "口播广告跳过",
                 AdSkipConfig.isEnabled()
-                        ? ("开启 · " + AdSkipConfig.getKeywordCount() + " 个关键词 · 跳 "
-                                + AdSkipConfig.getSkipSeconds() + " 秒")
+                        ? ("开启 · "
+                                + AdSkipConfig.getKeywordCount()
+                                + " 个关键词 · 跳 "
+                                + AdSkipConfig.getSkipSeconds()
+                                + " 秒")
                         : "已关闭",
                 "settings-adskip",
                 () -> open(this::adSkip));
         link(
                 "视频牛皮癣模糊",
-                AdBlurConfig.isEnabled()
-                        ? ("开启 · " + AdBlurTemplates.count(a) + " 个特征图")
-                        : "已关闭",
+                AdBlurConfig.isEnabled() ? ("开启 · " + AdBlurTemplates.count(a) + " 个特征图") : "已关闭",
                 "settings-adblur",
                 () -> open(this::adBlur));
         link(
                 "NSFW 内容过滤",
-                ContentGate.locked()
-                        ? "过滤开启"
-                        : (ContentFilterConfig.unlocked() ? "临时解锁中" : "过滤关闭"),
+                ContentGate.locked() ? "过滤开启" : (ContentFilterConfig.unlocked() ? "临时解锁中" : "过滤关闭"),
                 "settings-safety",
                 () -> open(this::contentSafety));
         link("软件更新", "", "settings-updates", () -> open(() -> new UpdateScreen(a).show()));
@@ -143,9 +142,7 @@ final class SettingsScreen {
     // ------------------------------------------------------------ 口播广告跳过
 
     void adSkip() {
-        page(
-                "口播广告跳过",
-                "识别烧录在音轨里的口播广告并自动快进。全程本地离线识别（sherpa-onnx），不上传任何音频；仅在「Media3」播放器下生效。");
+        page("口播广告跳过", "识别烧录在音轨里的口播广告并自动快进。全程本地离线识别（sherpa-onnx），不上传任何音频；仅在「Media3」播放器下生效。");
         link(
                 "口播关键词",
                 AdSkipConfig.getKeywordCount() + " 个 · " + AdSkipConfig.getKeywordsRaw(),
@@ -160,9 +157,7 @@ final class SettingsScreen {
                 this::pickAdSensitivity);
         link(
                 "命中后跳过时长",
-                AdSkipConfig.getSkipSeconds() == 0
-                        ? "关闭"
-                        : AdSkipConfig.getSkipSeconds() + " 秒",
+                AdSkipConfig.getSkipSeconds() == 0 ? "关闭" : AdSkipConfig.getSkipSeconds() + " 秒",
                 "adskip-duration",
                 this::pickAdDuration);
         link(
@@ -189,8 +184,7 @@ final class SettingsScreen {
                                 "恢复默认关键词与跳过时长？",
                                 () -> {
                                     AdSkipConfig.setKeywordsRaw(AdSkipConfig.DEFAULT_KEYWORDS);
-                                    AdSkipConfig.setSkipSeconds(
-                                            AdSkipConfig.DEFAULT_SKIP_SECONDS);
+                                    AdSkipConfig.setSkipSeconds(AdSkipConfig.DEFAULT_SKIP_SECONDS);
                                     AdSkipConfig.setSensitivity(AdSkipConfig.DEFAULT_SENSITIVITY);
                                     AdSkipController.get().onConfigChanged(a);
                                     a.refresh();
@@ -227,7 +221,8 @@ final class SettingsScreen {
     void pickAdSensitivity() {
         String[] labels = new String[AdSkipConfig.SENSITIVITY_LABELS.length];
         for (int i = 0; i < labels.length; i++) {
-            labels[i] = AdSkipConfig.SENSITIVITY_LABELS[i] + " · " + AdSkipConfig.SENSITIVITY_HINTS[i];
+            labels[i] =
+                    AdSkipConfig.SENSITIVITY_LABELS[i] + " · " + AdSkipConfig.SENSITIVITY_HINTS[i];
         }
         new AppDialog.Builder(a)
                 .setTitle("识别灵敏度")
@@ -312,11 +307,7 @@ final class SettingsScreen {
                     "adblur-templates",
                     () -> open(this::adBlurTemplates));
             if (!a.isTvDevice()) {
-                link(
-                        "采集当前画面特征图",
-                        "在播放中框选广告区域，保存为模板",
-                        "adblur-capture",
-                        this::startCapture);
+                link("采集当前画面特征图", "在播放中框选广告区域，保存为模板", "adblur-capture", this::startCapture);
             }
         }
         if (a.isTvDevice()) {
@@ -345,8 +336,12 @@ final class SettingsScreen {
                                 }));
     }
 
-    void adBlurToggle(
-            String title, boolean initial, java.util.function.Consumer<Boolean> onChange) {
+    /** API 23 没有 java.util.function.Consumer，设置页布尔回调用这个应用内 SAM。 */
+    interface BoolAction {
+        void accept(boolean value);
+    }
+
+    void adBlurToggle(String title, boolean initial, BoolAction onChange) {
         boolean tv = a.isTvDevice();
         LinearLayout row = a.row();
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -377,8 +372,16 @@ final class SettingsScreen {
         row.setOnFocusChangeListener(
                 (v, f) ->
                         FocusMotion.style(
-                                a, row, f, 0xff222226, 0xff37373e, 14, MainActivity.WHITE,
-                                MainActivity.WHITE, true, 1.008f));
+                                a,
+                                row,
+                                f,
+                                0xff222226,
+                                0xff37373e,
+                                14,
+                                MainActivity.WHITE,
+                                MainActivity.WHITE,
+                                true,
+                                1.008f));
         if (tv) a.pressFeedback(row);
         else MobileShell.bindCardTouchFeedback(a, row, a.bg(0xff222226, 14), a.bg(0xff303038, 14));
         final boolean[] state = {initial};
@@ -399,7 +402,7 @@ final class SettingsScreen {
             String[] labels,
             int[] values,
             int current,
-            java.util.function.Consumer<Integer> onChange) {
+            PlayerBubble.IntAction onChange) {
         int selected = 0;
         for (int i = 0; i < values.length; i++) if (current == values[i]) selected = i;
         final int choice = selected;
@@ -410,7 +413,12 @@ final class SettingsScreen {
                 () -> {
                     if (!a.isTvDevice()) {
                         MobileShell.showDrawerPicker(
-                                a, title, "在下方抽屉中选择预设选项", labels, choice, index -> onChange.accept(values[index]));
+                                a,
+                                title,
+                                "在下方抽屉中选择预设选项",
+                                labels,
+                                choice,
+                                index -> onChange.accept(values[index]));
                         return;
                     }
                     new AppDialog.Builder(a)
@@ -479,9 +487,7 @@ final class SettingsScreen {
     // ------------------------------------------------------------ 内容安全
 
     void contentSafety() {
-        page(
-                "NSFW 内容过滤",
-                "本地关键词 / 番号 / 来源画像过滤，不联网、不上传。判定为 NSFW 的条目、频道与整块来源结果在显示前就被丢弃。");
+        page("NSFW 内容过滤", "本地关键词 / 番号 / 来源画像过滤，不联网、不上传。判定为 NSFW 的条目、频道与整块来源结果在显示前就被丢弃。");
         if (ContentFilterConfig.hasPin())
             link(
                     "儿童锁",
@@ -498,12 +504,9 @@ final class SettingsScreen {
                 "safety-enabled",
                 () ->
                         confirm(
-                                ContentFilterConfig.enabled()
-                                        ? "关闭内容过滤？"
-                                        : "开启内容过滤？",
+                                ContentFilterConfig.enabled() ? "关闭内容过滤？" : "开启内容过滤？",
                                 () -> {
-                                    ContentFilterConfig.setEnabled(
-                                            !ContentFilterConfig.enabled());
+                                    ContentFilterConfig.setEnabled(!ContentFilterConfig.enabled());
                                     a.refresh();
                                 }));
         link(
@@ -554,12 +557,8 @@ final class SettingsScreen {
                 .setPositiveButton(
                         "保存",
                         (d, i) -> {
-                            ContentFilterConfig.setExtraKeywordsRaw(
-                                    input.getText().toString());
-                            a.toast(
-                                    "已保存 "
-                                            + ContentFilterConfig.extraKeywordCount()
-                                            + " 个关键词");
+                            ContentFilterConfig.setExtraKeywordsRaw(input.getText().toString());
+                            a.toast("已保存 " + ContentFilterConfig.extraKeywordCount() + " 个关键词");
                             a.refresh();
                         })
                 .show();
@@ -570,16 +569,12 @@ final class SettingsScreen {
         AppDialog.Builder builder =
                 new AppDialog.Builder(a)
                         .setTitle("儿童锁 PIN")
-                        .setView(
-                                dialogBox(
-                                        input,
-                                        "PIN 只在本机保存加盐摘要；临时解锁 30 分钟，重启应用自动恢复锁定。"))
+                        .setView(dialogBox(input, "PIN 只在本机保存加盐摘要；临时解锁 30 分钟，重启应用自动恢复锁定。"))
                         .setNegativeButton("取消", null)
                         .setPositiveButton(
                                 "保存",
                                 (d, i) -> {
-                                    if (!ContentFilterConfig.setPin(
-                                            input.getText().toString())) {
+                                    if (!ContentFilterConfig.setPin(input.getText().toString())) {
                                         a.toast("PIN 必须是 4–6 位数字");
                                         return;
                                     }
@@ -625,8 +620,7 @@ final class SettingsScreen {
 
     void adultMarks() {
         page("已标记 NSFW 来源", "这些来源的结果会被整块丢弃。点击可解除标记。");
-        java.util.List<String> keys =
-                new java.util.ArrayList<>(ContentFilterConfig.adultKeys());
+        java.util.List<String> keys = new java.util.ArrayList<>(ContentFilterConfig.adultKeys());
         java.util.Collections.sort(keys);
         if (keys.isEmpty()) {
             a.paragraph("暂无标记。");
@@ -653,8 +647,7 @@ final class SettingsScreen {
     private EditText pinInput(String hint) {
         EditText input = new EditText(a);
         input.setHint(hint);
-        input.setInputType(
-                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
         input.setTextColor(MainActivity.WHITE);
         input.setHintTextColor(MainActivity.MUTED);
         input.setTextSize(18);
@@ -667,8 +660,7 @@ final class SettingsScreen {
         LinearLayout box = a.vertical();
         box.setPadding(a.dp(20), a.dp(8), a.dp(20), 0);
         box.addView(field);
-        if (note != null && !note.isEmpty())
-            box.addView(a.text(note, 12, MainActivity.MUTED));
+        if (note != null && !note.isEmpty()) box.addView(a.text(note, 12, MainActivity.MUTED));
         return box;
     }
 
@@ -688,7 +680,9 @@ final class SettingsScreen {
             String title,
             String subtitle,
             String[] labels,
-            java.util.function.IntConsumer handleChoice) {
+            // 不能用 java.util.function.IntConsumer：API 24 才有该接口，Android 6(API 23) 上
+            // D8 脱糖也不提供，CI 的 run_api23_callback_checks 会拒绝（真机到这条路径会 NoClassDefFoundError）。
+            PlayerBubble.IntAction handleChoice) {
         if (!a.isTvDevice()) {
             MobileShell.showDrawerPicker(a, title, subtitle, labels, -1, handleChoice::accept);
         } else {

@@ -48,6 +48,7 @@ public final class Cms {
 
     public static final class Category {
         public String id, name;
+
         /** 父类目 id（CMS 接口的 type_pid，0/空 表示顶级）。用于「合集类目返回空」时回落到子类。 */
         public String parent;
 

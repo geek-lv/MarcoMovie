@@ -76,8 +76,7 @@ final class DoubanHot {
 
     /** 手机货架：只保留两个热门榜。 */
     private static final Category[] SHELF_CATEGORIES = {
-        new Category("电视剧", "tv", "热门"),
-        new Category("电影", "movie", "热门"),
+        new Category("电视剧", "tv", "热门"), new Category("电影", "movie", "热门"),
     };
 
     /** TV 瀑布流一级大类：剧集 / 电影 / 综艺（细分榜单在各自 subs 里，组合均实测可用）。 */
@@ -127,6 +126,7 @@ final class DoubanHot {
 
     /** 榜单缓存：榜单变化慢，10 分钟足够，避免每次回首页都打豆瓣（按 type/tag 分键） */
     private static final long TTL_MS = 10 * 60 * 1000L;
+
     private static final Map<String, Cached> CACHE = new LinkedHashMap<>();
 
     private static final class Cached {
@@ -138,24 +138,29 @@ final class DoubanHot {
 
     /** 手机货架的 chip 清单与当前选中（网格模式下 categories 为 null） */
     private final Category[] categories;
+
     private final List<TextView> chips = new ArrayList<>();
     private int tab;
 
     /** TV 网格模式的大类/细分状态（货架模式下 majors 为 null） */
     private final Major[] majors;
+
     private final List<TextView> majorChips = new ArrayList<>();
     private final List<TextView> subChips = new ArrayList<>();
     private LinearLayout subRow;
     private int major, sub;
+
     /** 每个大类记住上次选中的细分榜单，切回来不用重新找 */
     private final int[] lastSub;
 
     /** 手机货架模式的行容器与提示行（网格模式下为 null） */
     private final LinearLayout rowBox;
+
     private final TextView hint;
 
     /** TV 网格模式的容器 / 状态行 / 「加载更多」（货架模式下 gridBox 为 null） */
     private final LinearLayout gridBox;
+
     private final TextView gridHint;
     private final int columns, posterWidth;
     private TextView gridMore;
@@ -166,12 +171,16 @@ final class DoubanHot {
     // ---- TV 瀑布流的分页状态（按分类 key 分开记） ----
     /** key -> 已加载并画出的条目 */
     private final Map<String, List<Item>> loaded = new LinkedHashMap<>();
+
     /** key -> 下一页的 page_start */
     private final Map<String, Integer> nextStart = new LinkedHashMap<>();
+
     /** key -> 豆瓣没有更多了 */
     private final Map<String, Boolean> exhausted = new LinkedHashMap<>();
+
     /** 网格行 -> 该行的卡片（供 DPad 焦点连线用） */
     private final List<List<View>> gridRows = new ArrayList<>();
+
     private int drawn;
     private boolean gridFailed, moreBusy;
 
@@ -269,7 +278,8 @@ final class DoubanHot {
      * @param posterWidthDp 单张海报宽度(dp)，沿用 HomeScreen 的 posterWidth
      * @return 瀑布流控制器，供 HomeScreen 做 DPad 焦点连线（{@link #wire}/{@link #dockRight}）
      */
-    static DoubanHot attachGrid(MainActivity a, LinearLayout parent, int columns, int posterWidthDp) {
+    static DoubanHot attachGrid(
+            MainActivity a, LinearLayout parent, int columns, int posterWidthDp) {
         LinearLayout section = a.vertical();
 
         LinearLayout header = a.row();
@@ -335,7 +345,16 @@ final class DoubanHot {
                                 true,
                                 1.03f));
         FocusMotion.style(
-                a, more, false, 0xff24242b, 0xff24242b, 18, MainActivity.WHITE, MainActivity.WHITE, true, 1.03f);
+                a,
+                more,
+                false,
+                0xff24242b,
+                0xff24242b,
+                18,
+                MainActivity.WHITE,
+                MainActivity.WHITE,
+                true,
+                1.03f);
         more.setVisibility(View.GONE);
         waterfall.gridMore = more;
 
@@ -499,12 +518,15 @@ final class DoubanHot {
                                         hint.setText("正在重试获取" + c.label + "热榜…");
                                         hint.setOnClickListener(null);
                                         final int retryIndex = index;
-                                        a.ui.postDelayed(() -> select(retryIndex, attemptLeft + 1), 800);
+                                        a.ui.postDelayed(
+                                                () -> select(retryIndex, attemptLeft + 1), 800);
                                     } else {
                                         rowBox.removeAllViews();
                                         hint.setText(
                                                 "豆瓣热榜暂时取不到"
-                                                        + (failure == null ? "" : "（" + failure + "）")
+                                                        + (failure == null
+                                                                ? ""
+                                                                : "（" + failure + "）")
                                                         + " · 点此重试");
                                         hint.setOnClickListener(v -> select(tab));
                                     }
@@ -600,14 +622,19 @@ final class DoubanHot {
                                     }
                                     if (attempt < 2) {
                                         gridHint.setText("正在重试获取" + cat.label + "榜单…");
-                                        a.ui.postDelayed(() -> {
-                                            if (mine == token) fetchGrid(cat, 0, attempt + 1);
-                                        }, 800);
+                                        a.ui.postDelayed(
+                                                () -> {
+                                                    if (mine == token)
+                                                        fetchGrid(cat, 0, attempt + 1);
+                                                },
+                                                800);
                                     } else {
                                         gridFailed = true;
                                         gridHint.setText(
                                                 "豆瓣榜单暂时取不到"
-                                                        + (failure == null ? "" : "（" + failure + "）"));
+                                                        + (failure == null
+                                                                ? ""
+                                                                : "（" + failure + "）"));
                                         if (gridMore != null) {
                                             gridMore.setText("重新加载");
                                             gridMore.setVisibility(View.VISIBLE);
@@ -625,7 +652,8 @@ final class DoubanHot {
                                 Set<String> ids = new HashSet<>();
                                 for (Item it : all) ids.add(it.id);
                                 for (Item it : result)
-                                    if (it.id != null && !it.id.isEmpty() && ids.add(it.id)) all.add(it);
+                                    if (it.id != null && !it.id.isEmpty() && ids.add(it.id))
+                                        all.add(it);
                                 exhausted.put(key, result.size() < PAGE);
                                 drawGrid(all, pageStart);
                             });
@@ -787,10 +815,12 @@ final class DoubanHot {
                             MainActivity.WHITE,
                             true,
                             1.035f);
-                    name.setTextColor(f ? MainActivity.WHITE : (grid ? 0xffc8c8d0 : MainActivity.WHITE));
+                    name.setTextColor(
+                            f ? MainActivity.WHITE : (grid ? 0xffc8c8d0 : MainActivity.WHITE));
                     if (f)
                         v.requestRectangleOnScreen(
-                                new Rect(0, -a.dp(8), v.getWidth(), v.getHeight() + a.dp(10)), false);
+                                new Rect(0, -a.dp(8), v.getWidth(), v.getHeight() + a.dp(10)),
+                                false);
                 });
         FocusMotion.style(
                 a,
@@ -821,7 +851,9 @@ final class DoubanHot {
     void wire() {
         if (!grid()) return;
         View activeMajor =
-                majorChips.isEmpty() ? null : majorChips.get(Math.min(major, majorChips.size() - 1));
+                majorChips.isEmpty()
+                        ? null
+                        : majorChips.get(Math.min(major, majorChips.size() - 1));
         View activeSub =
                 subChips.isEmpty() ? null : subChips.get(Math.min(sub, subChips.size() - 1));
         linkHorizontal(majorChips);
@@ -839,10 +871,10 @@ final class DoubanHot {
             chip.setNextFocusUpId(activeMajor != null ? activeMajor.getId() : chip.getId());
             chip.setNextFocusDownId(
                     gridRows.isEmpty()
-                            ? (gridMore != null && gridMore.isShown() ? gridMore.getId() : chip.getId())
-                            : gridRows.get(0)
-                                    .get(Math.min(i, gridRows.get(0).size() - 1))
-                                    .getId());
+                            ? (gridMore != null && gridMore.isShown()
+                                    ? gridMore.getId()
+                                    : chip.getId())
+                            : gridRows.get(0).get(Math.min(i, gridRows.get(0).size() - 1)).getId());
         }
         for (int r = 0; r < gridRows.size(); r++) {
             List<View> row = gridRows.get(r);
@@ -860,7 +892,9 @@ final class DoubanHot {
                     card.setNextFocusDownId(down.get(Math.min(c, down.size() - 1)).getId());
                 } else {
                     card.setNextFocusDownId(
-                            gridMore != null && gridMore.isShown() ? gridMore.getId() : card.getId());
+                            gridMore != null && gridMore.isShown()
+                                    ? gridMore.getId()
+                                    : card.getId());
                 }
             }
         }

@@ -14,8 +14,7 @@ import org.json.JSONObject;
  */
 public final class ContentGate {
 
-    private ContentGate() {
-    }
+    private ContentGate() {}
 
     /** 当前是否处于"应当拦截"的状态：总开关打开且未临时解锁 */
     public static boolean locked() {
@@ -27,16 +26,23 @@ public final class ContentGate {
      *
      * @return 命中原因，null 表示放行
      */
-    public static String reasonItem(String name, String type, String remarks, String area, String desc) {
+    public static String reasonItem(
+            String name, String type, String remarks, String area, String desc) {
         if (!locked()) return null;
-        return AdultRules.matchItem(name, type, remarks, area,
+        return AdultRules.matchItem(
+                name,
+                type,
+                remarks,
+                area,
                 ContentFilterConfig.scanDescription() ? desc : null,
-                ContentFilterConfig.numberRegex(), ContentFilterConfig.extraKeywords(),
+                ContentFilterConfig.numberRegex(),
+                ContentFilterConfig.extraKeywords(),
                 ContentFilterConfig.strictSuggestive());
     }
 
     /** 是否应隐藏该条目 */
-    public static boolean blockedItem(String name, String type, String remarks, String area, String desc) {
+    public static boolean blockedItem(
+            String name, String type, String remarks, String area, String desc) {
         return reasonItem(name, type, remarks, area, desc) != null;
     }
 
@@ -88,7 +94,8 @@ public final class ContentGate {
         for (int i = 0; i < channels.length(); i++) {
             JSONObject channel = channels.optJSONObject(i);
             if (channel == null) continue;
-            if (!blockedChannel(channel.optString("name"), channel.optString("group"))) visible.put(channel);
+            if (!blockedChannel(channel.optString("name"), channel.optString("group")))
+                visible.put(channel);
         }
         return visible;
     }

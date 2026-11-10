@@ -47,8 +47,16 @@ public final class AdSkipAudioProcessor extends BaseAudioProcessor {
         if (ratio <= 0) ratio = 1.0;
         acc = 0.0;
         prev = 0.0f;
-        android.util.Log.i("AdSkip", "onConfigure: in=" + sampleRate + "Hz x" + channelCount
-                + " enc=" + encoding + " -> ratio=" + ratio);
+        android.util.Log.i(
+                "AdSkip",
+                "onConfigure: in="
+                        + sampleRate
+                        + "Hz x"
+                        + channelCount
+                        + " enc="
+                        + encoding
+                        + " -> ratio="
+                        + ratio);
         // 保持原格式透传，不做任何音频改动
         return inputAudioFormat;
     }
@@ -105,7 +113,7 @@ public final class AdSkipAudioProcessor extends BaseAudioProcessor {
         // ratio>1（如 48k→16k）为抽取，ratio<1（如 8k→16k）为上采样，ratio≈1 为透传。
         // 旧实现对 ratio<=1 直接透传，低采样率源（8k/11k/12k）会使音频时钟半速漂移，
         // 触发"位置校正"每几秒空转重锚，且命中广告时算错跳转位置。
-        acc += 1.0 / ratio;                 // 每输入 1 样本应产出 1/ratio 个输出样本
+        acc += 1.0 / ratio; // 每输入 1 样本应产出 1/ratio 个输出样本
         int emit = (int) acc;
         if (emit > 0) {
             acc -= emit;
