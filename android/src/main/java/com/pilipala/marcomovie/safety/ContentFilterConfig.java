@@ -164,6 +164,11 @@ public final class ContentFilterConfig {
         return p == null ? "" : p.getString(KEY_EXTRA, "");
     }
 
+    /** 与 {@link #extraKeywordsRaw()} 同义，供配置同步序列化调用（保持命名一致） */
+    public static String getExtraKeywordsRaw() {
+        return extraKeywordsRaw();
+    }
+
     public static void setExtraKeywordsRaw(String raw) {
         SharedPreferences p = prefs;
         if (p != null) p.edit().putString(KEY_EXTRA, raw == null ? "" : raw.trim()).apply();

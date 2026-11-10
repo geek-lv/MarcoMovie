@@ -50,7 +50,11 @@ final class ImageLoader {
 
     static void poster(MainActivity a, String address, ImageView image, boolean detail) {
         image.setTag(address);
-        if (!Cms.isHttp(address) && !address.startsWith("catpaw://")) return;
+        if (!Cms.isHttp(address) && !address.startsWith("catpaw://")) {
+            if (!address.isEmpty())
+                android.util.Log.w("MM_POSTER", "skip non-http poster address=[" + address + "]");
+            return;
+        }
         final int ticket = a.generation;
         int initialW = ImageDecodePolicy.targetWidth(image.getWidth(), detail);
         int initialH = ImageDecodePolicy.targetHeight(image.getHeight(), detail);
@@ -176,7 +180,9 @@ final class ImageLoader {
                                                 }
                                             });
                                 }
-                            } catch (Exception ignored) {
+                            } catch (Exception e) {
+                                android.util.Log.e(
+                                        "MM_POSTER", "poster load failed: " + address, e);
                             } finally {
                                 synchronized (IN_FLIGHT) {
                                     if (IN_FLIGHT.get(key) == owned) IN_FLIGHT.remove(key);

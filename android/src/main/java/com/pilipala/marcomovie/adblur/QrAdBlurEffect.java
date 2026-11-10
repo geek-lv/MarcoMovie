@@ -269,7 +269,7 @@ public final class QrAdBlurEffect implements GlEffect {
                 noMatch = 0;
                 frameIndex = 0;
                 return new Size(inputWidth, inputHeight);
-            } catch (GlUtil.GlException | java.io.IOException e) {
+            } catch (GlUtil.GlException e) {
                 throw new androidx.media3.common.VideoFrameProcessingException(e);
             }
         }
@@ -531,7 +531,7 @@ public final class QrAdBlurEffect implements GlEffect {
 
         private static int currentFbo() {
             int[] f = new int[1];
-            GLES20.glGetIntegv(GLES20.GL_FRAMEBUFFER_BINDING, f, 0);
+            GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, f, 0);
             return f[0];
         }
 

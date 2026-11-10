@@ -10,6 +10,7 @@ import android.widget.*;
 import com.pilipala.marcomovie.adskip.AdSkipConfig;
 import com.pilipala.marcomovie.adskip.AdSkipController;
 import com.pilipala.marcomovie.adblur.AdBlurConfig;
+import com.pilipala.marcomovie.adblur.AdBlurController;
 import com.pilipala.marcomovie.adblur.AdBlurTemplates;
 import com.pilipala.marcomovie.safety.AdultSourceStats;
 import com.pilipala.marcomovie.safety.ContentFilterConfig;
@@ -74,7 +75,10 @@ final class SettingsScreen {
         row.setTag(key);
         row.setId(View.generateViewId());
         row.setFocusable(tv);
-        row.setFocusableInTouchMode(tv);
+        // 关键修复：TV 布局跑在触摸屏上时，focusableInTouchMode=true 会让「第一次触摸只抢焦点（触发缩放动画）、
+        // 第二次才发 click」，表现为开关/行只缩放不响应。设 false 后触摸单击直接触发 onClick，
+        // 同时保留 focusable=true 不影响真电视的 DPad 焦点（遥控器 OK 键直接发 click）。
+        row.setFocusableInTouchMode(false);
         row.setClickable(true);
         row.setBackground(a.bg(0xff222226, 14));
         row.setOnFocusChangeListener(
@@ -364,7 +368,10 @@ final class SettingsScreen {
         switchLp.leftMargin = a.dp(12);
         row.addView(sw, switchLp);
         row.setFocusable(tv);
-        row.setFocusableInTouchMode(tv);
+        // 关键修复：TV 布局跑在触摸屏上时，focusableInTouchMode=true 会让「第一次触摸只抢焦点（触发缩放动画）、
+        // 第二次才发 click」，表现为开关/行只缩放不响应。设 false 后触摸单击直接触发 onClick，
+        // 同时保留 focusable=true 不影响真电视的 DPad 焦点（遥控器 OK 键直接发 click）。
+        row.setFocusableInTouchMode(false);
         row.setClickable(true);
         row.setBackground(a.bg(0xff222226, 14));
         row.setOnFocusChangeListener(
@@ -1441,7 +1448,10 @@ final class SettingsScreen {
         row.setTag("setting-" + key);
         row.setId(View.generateViewId());
         row.setFocusable(tv);
-        row.setFocusableInTouchMode(tv);
+        // 关键修复：TV 布局跑在触摸屏上时，focusableInTouchMode=true 会让「第一次触摸只抢焦点（触发缩放动画）、
+        // 第二次才发 click」，表现为开关/行只缩放不响应。设 false 后触摸单击直接触发 onClick，
+        // 同时保留 focusable=true 不影响真电视的 DPad 焦点（遥控器 OK 键直接发 click）。
+        row.setFocusableInTouchMode(false);
         row.setClickable(true);
         row.setBackground(a.bg(0xff222226, 14));
         row.setOnFocusChangeListener(

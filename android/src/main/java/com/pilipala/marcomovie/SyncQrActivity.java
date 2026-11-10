@@ -14,6 +14,9 @@ import com.google.zxing.BarcodeFormat;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
+import com.pilipala.marcomovie.adblur.AdBlurController;
+import com.pilipala.marcomovie.adskip.AdSkipController;
+
 import java.util.Locale;
 
 /**
