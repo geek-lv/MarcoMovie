@@ -1182,21 +1182,7 @@ final class MobileShell {
         final int[] completedPage = {0};
         resumeHome =
                 () -> {
-                    boolean showHero =
-                            !SourceController.isConfigOrNetdiskSite(currentSite)
-                                    && a.prefs.getBoolean(Prefs.SHOW_HERO_BANNER, true)
-                                    && selectedCategoryId.isEmpty()
-                                    && !currentVideos.isEmpty();
-                    if (showHero) {
-                        if (heroContainer.getChildCount() == 0) {
-                            heroContainer.addView(
-                                    buildHeroShowcaseCard(currentSite, currentVideos.get(0)));
-                        }
-                        heroContainer.setVisibility(View.VISIBLE);
-                    } else {
-                        heroContainer.removeAllViews();
-                        heroContainer.setVisibility(View.GONE);
-                    }
+                    // 「今日首推」hero 卡已随 552b1cc 移除，首页顶部固定位由豆瓣热播货架承担
                     if (!loadingPage[0]) return;
                     loadingPage[0] = false;
                     pageFailed[0] = false;
@@ -1282,10 +1268,6 @@ final class MobileShell {
                     final int request = ++homeRequest;
                     loadingPage[0] = true;
                     if (currentPage == 1) {
-                        if (!selectedCategoryId.isEmpty()) {
-                            heroContainer.removeAllViews();
-                            heroContainer.setVisibility(View.GONE);
-                        }
                         statusText.setVisibility(View.VISIBLE);
                         statusText.setText("正在加载…");
                         loadMoreBtn.setVisibility(View.GONE);
