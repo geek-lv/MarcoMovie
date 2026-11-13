@@ -274,12 +274,17 @@ final class SettingsScreen {
         // 设置页是移动端该功能的唯一入口：此处必须先 init（TV 由播放器链路初始化）。
         // 否则 prefs==null 时所有读写静默 no-op，表现为「开关点了没反应」。
         AdBlurConfig.init(a);
+        String tplHow =
+                a.isTvDevice()
+                        ? "电视端不提供截图采集：请在手机上框选保存模板，再用下方「电视同步码」扫码接收，"
+                                + "两端识别与模糊是同一套代码。"
+                        : "特征图在横屏播放器右侧菜单「采集」框选保存，可用下方「同步到电视」推给电视；";
         page(
                 "视频牛皮癣模糊",
                 "识别画面里的二维码 / 贴片水印，把那块区域实时模糊：广告出现即模糊、消失即恢复清晰。"
                         + "模糊样式可选「柔和高斯」（多轮小步长迭代、平滑无条纹）或「马赛克」；"
                         + "边缘羽化向外扩，不会把广告四边露出来。"
-                        + "特征图在横屏播放器右侧菜单「采集」框选保存，或从相册导入 PNG；"
+                        + tplHow
                         + "仅本机离线 GPU 匹配，不联网。仅在 Media3 播放器下生效；"
                         + "开启后播放会启用 GL 合成，个别 HDR 片源画质可能降级。");
         adBlurToggle(
@@ -341,7 +346,7 @@ final class SettingsScreen {
                 // 采集入口已统一移至横屏播放器右侧菜单「采集」（暂停抓显示帧，无 GL 管线依赖）
                 link(
                         "从相册导入特征图",
-                        "选择已保存的广告区域 PNG 截图（可多选），导入后随扫码同步到电视",
+                        "兼容入口：相册图没有框选定位信息，新版识别会跳过；建议用播放器菜单「采集」",
                         "adblur-import",
                         this::startGalleryImport);
             }
@@ -349,13 +354,13 @@ final class SettingsScreen {
         if (a.isTvDevice()) {
             link(
                     "电视同步码",
-                    "展示二维码，手机扫码把配置推送到本机",
+                    "展示二维码，接收手机扫码推送的设置与牛皮癣特征图模板（电视无需截图）",
                     "adblur-tv-qr",
                     () -> a.startActivity(new Intent(a, SyncQrActivity.class)));
         } else {
             link(
                     "同步到电视",
-                    "扫描电视上的二维码，把全部设置推过去",
+                    "扫描电视上的二维码，把本机设置与已保存的特征图模板一起推过去",
                     "adblur-sync-tv",
                     () -> a.startActivity(new Intent(a, SyncScanActivity.class)));
         }
@@ -472,7 +477,10 @@ final class SettingsScreen {
         page("已保存特征图", "这些模板用于匹配画面里的牛皮癣。点击可删除；删除后该模板不再参与模糊。");
         java.util.List<String> names = AdBlurTemplates.list(a);
         if (names.isEmpty()) {
-            a.paragraph("暂无特征图。可在横屏播放器右侧菜单点「采集」框选截取，或在「视频牛皮癣模糊」页「从相册导入特征图」。");
+            a.paragraph(
+                    a.isTvDevice()
+                            ? "暂无特征图。电视端不支持截图采集，请用手机框选保存后，在「视频牛皮癣模糊」页打开「电视同步码」扫码接收。"
+                            : "暂无特征图。可在横屏播放器右侧菜单点「采集」框选截取，再用「同步到电视」推送给电视。");
             return;
         }
         for (final String name : names) {

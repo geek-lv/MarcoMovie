@@ -18,16 +18,22 @@ import org.json.JSONObject;
  *
  * <p>上游自带的「发现」分类瀑布流（片源 home()/category() 片单）已整体移除：片源海报
  * 防盗链 403 屡屡加载不出，片单也不跟热播走。首页改为 {@link DoubanHot#attachGrid}
- * 的豆瓣纵向网格（电视剧/电影 tab + 加载更多翻页），点封面拿片名去当前片源搜索，
- * 播放链路不变。片源自身的片库仍可从遥控器 MENU 键、搜索、收藏进入。
+ * 的豆瓣纵向网格：顶部「剧集 / 电影 / 综艺」下拉切一级大类，下方一行细分榜单，
+ * 再往下是海报网格 + 加载更多翻页；点封面拿片名去全部片源搜索，播放链路不变。
+ * 首页不设线路切换按钮（搜索本就遍历所有片源，切当前片源只影响排序）。
+ * 片源自身的片库仍可从遥控器 MENU 键、搜索、收藏进入。
  */
 final class HomeScreen {
+    /** TV 首页把豆瓣三大类收敛成下拉后，跨首页重建记住上次选择（与手机端 doubanMajor 对齐）。 */
+    private static int tvDoubanMajor = 0;
+
     final MainActivity a;
     final Cms.Site site;
     final int COLUMNS;
     final float navScale;
     final List<View> historyCards = new ArrayList<>();
     TextView allHistory;
+    TextView majorPill;
     int ticket, posterWidth;
     HomeAmbient ambient;
     DoubanHot douban;
@@ -115,8 +121,12 @@ final class HomeScreen {
         posterWidth = Math.max(48, (int) ((width - marginDp - (COLUMNS - 1) * 14) / COLUMNS) - 8);
         historySection();
         // 上游片源瀑布流已移除，首页主体整体换成豆瓣热播瀑布流（纵向网格 + 加载更多）。
-        // 海报走豆瓣图床（带 Referer/UA 内联头，稳定可加载），点封面仍拿片名在当前片源搜索。
-        douban = DoubanHot.attachGrid(a, a.body, COLUMNS, posterWidth);
+        // 海报走豆瓣图床（带 Referer/UA 内联头，稳定可加载），点封面拿片名到全部片源搜索。
+        // 与手机端一致：一级「剧集 / 电影 / 综艺」放顶部下拉，片单区只保留一层细分榜单。
+        // 首页本来就不该有「切换线路」按钮 —— 搜索永远遍历所有片源。
+        majorHeading();
+        douban = DoubanHot.attachGrid(a, a.body, COLUMNS, posterWidth, false, tvDoubanMajor);
+        if (majorPill != null) douban.setMajorSwitcher(majorPill);
         retainedRoot = a.root;
         retainedBody = a.body;
         retainedScroll = a.scroll;
@@ -190,6 +200,62 @@ final class HomeScreen {
         if (!active() || site == null) return;
         a.homeData.remove(site.key);
         a.refresh();
+    }
+
+    /**
+     * 豆瓣片单顶部行：一级大类做成一个「剧集 ▾」下拉，与手机端右上角入口同构。
+     *
+     * <p>历史上 TV 首页这里放的是「当前片源 ▾」线路切换按钮，但首页卡片点进去是
+     * 「搜索所有片源」，切换当前片源只影响排序、不影响搜索范围，语义上是无效的，
+     * 因此删除后不再复刻，改为真正有用的豆瓣大类切换。
+     */
+    void majorHeading() {
+        final String[] labels = DoubanHot.majorLabels();
+        tvDoubanMajor = Math.max(0, Math.min(tvDoubanMajor, labels.length - 1));
+        LinearLayout heading = a.row();
+        heading.setTag("douban-major-heading");
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        heading.setClipChildren(false);
+        heading.setClipToPadding(false);
+        heading.setPadding(a.dp(16), a.dp(10), a.dp(16), 0);
+        TextView title = a.text("豆瓣片单", 16f, MainActivity.WHITE);
+        title.setTypeface(null, Typeface.BOLD);
+        heading.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
+        majorPill = pill(labels[tvDoubanMajor] + "  ▾", "douban-major-switcher", this::chooseMajor);
+        majorPill.setTextSize(13f * navScale);
+        heading.addView(
+                majorPill,
+                new LinearLayout.LayoutParams(-2, a.dp(Math.round(32 * navScale))));
+        a.body.addView(heading, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    /** 遥控器友好的单选弹窗（AppDialog 的选项是可聚焦 Button，DPad 上下 + 确认即可）。 */
+    void chooseMajor() {
+        if (douban == null) return;
+        final String[] labels = DoubanHot.majorLabels();
+        new AppDialog.Builder(a)
+                .setTitle("豆瓣片单 · 选择大类")
+                .setMessage("选好大类后，在下方一行继续挑细分榜单。")
+                .setSingleChoiceItems(
+                        labels,
+                        douban.currentMajor(),
+                        (d, index) -> {
+                            tvDoubanMajor = index;
+                            if (majorPill != null) majorPill.setText(labels[index] + "  ▾");
+                            douban.selectMajor(index);
+                            douban.wire();
+                            if (majorPill != null)
+                                majorPill.post(
+                                        () -> {
+                                            View firstSub =
+                                                    a.root.findViewWithTag("douban-tab:0");
+                                            if (firstSub != null)
+                                                majorPill.setNextFocusDownId(firstSub.getId());
+                                            majorPill.requestFocus();
+                                        });
+                        })
+                .setNegativeButton("取消", null)
+                .show();
     }
 
     void historySection() {
@@ -391,6 +457,11 @@ final class HomeScreen {
                     stackedHistory ? historyCards.get(0).getId() : View.NO_ID);
         }
         if (douban != null) douban.wire();
+        // 下拉 pill 的「下」指到细分条首项；细分条的「上」由 DoubanHot.wire() 指回 pill
+        if (majorPill != null) {
+            View firstSub = a.root.findViewWithTag("douban-tab:0");
+            if (firstSub != null) majorPill.setNextFocusDownId(firstSub.getId());
+        }
         if (a.homeDock != null) {
             if (allHistory != null) a.homeDock.rightEdge(allHistory);
             if (douban != null) douban.dockRight(a.homeDock);

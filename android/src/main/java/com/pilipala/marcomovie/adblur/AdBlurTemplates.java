@@ -204,6 +204,55 @@ public class AdBlurTemplates {
         }
     }
 
+    /**
+     * 配置同步专用：把发送端的 PNG <b>原字节</b>写入并保留文件名，同时原样还原 .meta。
+     *
+     * <p>不能走 {@link #save}：它会 decode → 重新 compress，并且把文件名换成新的时间戳后缀。
+     * 重编码本身不改变像素，但一旦原图最长边超过 {@link #STORE_MAX_DIM} 就会被缩放，
+     * 与 .meta 里记录的 cropW/cropH 标定尺寸失配，电视端 ROI 换算会整体偏移。
+     *
+     * @return 图片合法且落盘成功返回 true；无 .meta 或 .meta 非法时仍返回 true（图片已保存，
+     *         只是检测侧会按无标定信息处理）
+     */
+    public static boolean saveRaw(
+            Context c, String name, byte[] png, @Nullable String meta) {
+        if (png == null || png.length == 0 || png.length > MAX_BYTES) return false;
+        String n = sanitize(name == null ? "" : name);
+        if (!n.endsWith(".png")) n = n + ".png";
+        // 必须是可解码的位图，避免把垃圾字节同步进来占住一个模板槽位
+        BitmapFactory.Options opt = new BitmapFactory.Options();
+        opt.inJustDecodeBounds = true;
+        BitmapFactory.decodeByteArray(png, 0, png.length, opt);
+        if (opt.outWidth < 2 || opt.outHeight < 2) return false;
+
+        File d = dirFile(c);
+        File tmp = new File(d, n + ".tmp");
+        File f = new File(d, n);
+        try (FileOutputStream os = new FileOutputStream(tmp)) {
+            os.write(png);
+        } catch (Exception e) {
+            tmp.delete();
+            return false;
+        }
+        if (!tmp.renameTo(f)) {
+            tmp.delete();
+            return false;
+        }
+        // 只接受合法的标定文本；非法 .meta 会让 readMeta() 返回 null，检测侧跳过该模板
+        if (meta != null && Meta.decode(meta) != null) writeMeta(c, n, meta);
+        return true;
+    }
+
+    /** 统计 {模板总数, 带 .meta 可用于定位的模板数}，供同步接收页回显。 */
+    public static int[] stats(Context c) {
+        int total = 0, usable = 0;
+        for (String name : list(c)) {
+            total++;
+            if (readMeta(c, name) != null) usable++;
+        }
+        return new int[] {total, usable};
+    }
+
     /** 原样写入 .meta 文本（供配置同步还原）。 */
     public static void writeMeta(Context c, String pngName, String raw) {
         if (pngName == null || raw == null) return;

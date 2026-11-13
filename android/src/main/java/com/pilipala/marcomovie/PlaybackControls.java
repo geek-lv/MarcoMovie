@@ -189,7 +189,10 @@ final class PlaybackControls {
             add(row, "倍速", "speed", this::speed);
             add(row, "音轨", "audio-tracks", () -> tracks(1));
             add(row, "解码", "decoder", this::decoderMenu);
-            add(row, "采集", "adblur-capture-tool", this::captureAdTemplate);
+            // 电视遥控器无法框选截图：模板只在手机上采集，经设置页同步码推送过来
+            if (!a.isTvDevice()) {
+                add(row, "采集", "adblur-capture-tool", this::captureAdTemplate);
+            }
             add(row, "片头", "skip-intro-tool", () -> skip(true));
             add(row, "片尾", "skip-outro-tool", () -> skip(false));
             add(row, "更多", "more", this::more);
@@ -238,7 +241,10 @@ final class PlaybackControls {
             add(row, "音轨", "audio-tracks", () -> tracks(1));
             add(row, "解码", "decoder", this::decoderMenu);
             add(row, "弹幕", "danmaku-tool", this::danmaku);
-            add(row, "采集", "adblur-capture-tool", this::captureAdTemplate);
+            // 电视遥控器无法框选截图：模板只在手机上采集，经设置页同步码推送过来
+            if (!a.isTvDevice()) {
+                add(row, "采集", "adblur-capture-tool", this::captureAdTemplate);
+            }
             add(row, "片头", "skip-intro-tool", () -> skip(true));
             add(row, "片尾", "skip-outro-tool", () -> skip(false));
             add(row, "循环", "repeat-tool", this::repeat);
@@ -779,6 +785,15 @@ final class PlaybackControls {
      * 进入框选编辑页（横屏）。
      */
     void captureAdTemplate() {
+        if (a.isTvDevice()) {
+            showBubble(
+                    "电视端请在手机上框选模板，再用「设置 → 视频牛皮癣模糊 → 电视同步码」扫码接收",
+                    new String[] {"知道了"},
+                    -1,
+                    i -> {},
+                    "");
+            return;
+        }
         if (a.player == null || !a.prepared) {
             showBubble("请先播放视频", new String[] {"知道了"}, -1, i -> {}, "");
             return;

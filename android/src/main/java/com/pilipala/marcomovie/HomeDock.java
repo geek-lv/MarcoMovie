@@ -213,7 +213,7 @@ final class HomeDock {
                             ? null
                             : a.root.findViewWithTag(a.current.homeReturnFocus);
             if (target == null || !target.isShown())
-                target = a.root.findViewWithTag("source-switcher");
+                target = a.root.findViewWithTag("douban-major-switcher");
             if (target == null) target = a.root.findViewWithTag("primary");
             if (target != null) target.requestFocus();
         }

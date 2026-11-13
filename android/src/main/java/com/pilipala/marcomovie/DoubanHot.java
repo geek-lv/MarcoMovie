@@ -157,6 +157,8 @@ final class DoubanHot {
 
     private final List<TextView> majorChips = new ArrayList<>();
     private final List<TextView> subChips = new ArrayList<>();
+    /** TV 首页把大类做成下拉时，由 HomeScreen 注入那个 pill，DPad 上键回到它。 */
+    private View majorSwitcher;
     private LinearLayout subRow;
     private int major, sub;
 
@@ -332,8 +334,10 @@ final class DoubanHot {
     /**
      * TV 首页瀑布流：豆瓣纵向网格，替代上游片源自带的分类瀑布流。
      *
-     * <p>两级分类：第一行大类（剧集 / 电影 / 综艺），第二行该大类下的细分榜单
-     * （热门、美剧、日剧、经典、豆瓣高分……超出屏宽横向滚动）。底部「加载更多」
+     * <p>分类分两级：一级大类（剧集 / 电影 / 综艺）和该大类下的细分榜单
+     * （热门、美剧、日剧、经典、豆瓣高分……超出屏宽横向滚动）。两端都把一级做成
+     * 顶栏下拉（{@code showMajorRow=false}），片单区只显示一行细分 chips；
+     * {@code showMajorRow=true} 是保留的旧双层 chips 形态。底部「加载更多」
      * 按 20 条/页继续向豆瓣翻页；已加载的榜单留在内存里，切回来立即重画，不打豆瓣。
      * 每个大类还会记住上次选中的细分。
      *
@@ -347,7 +351,7 @@ final class DoubanHot {
     }
 
     /**
-     * @param showMajorRow TV 保留大类行；手机把大类入口放到顶栏时传 false，片单区只显示细分行
+     * @param showMajorRow true 才在片单区画一级大类 chips 行；TV 与手机现在都传 false
      * @param initialMajor 恢复上次选择的大类，避免页面重建后总跳回剧集
      */
     static DoubanHot attachGrid(
@@ -391,7 +395,8 @@ final class DoubanHot {
                     }
                 });
 
-        // TV：第一级大类条；手机：大类入口在右上角，这里不再重复显示第一级。
+        // 老形态：片单区内再画一行一级大类 chips。现在两端都把一级放到顶部下拉，
+        // 这里只为兼容保留，正常路径 showMajorRow=false 不创建。
         HorizontalScrollView majorScroll = null;
         if (showMajorRow) {
             majorScroll = new HorizontalScrollView(a);
@@ -531,6 +536,15 @@ final class DoubanHot {
         String[] labels = new String[GRID_MAJORS.length];
         for (int i = 0; i < GRID_MAJORS.length; i++) labels[i] = GRID_MAJORS[i].label;
         return labels;
+    }
+
+    /** TV 首页不渲染大类 chips 行时，把顶部的「大类 ▾」下拉挂进来供 DPad 连线。 */
+    void setMajorSwitcher(View v) {
+        majorSwitcher = v;
+    }
+
+    int currentMajor() {
+        return major;
     }
 
     /** 切大类：重建二级细分条，并回到该大类上次选中的细分。 */
@@ -1294,9 +1308,11 @@ final class DoubanHot {
     void wire() {
         if (!grid()) return;
         View activeMajor =
-                majorChips.isEmpty()
-                        ? null
-                        : majorChips.get(Math.min(major, majorChips.size() - 1));
+                majorSwitcher != null
+                        ? majorSwitcher
+                        : (majorChips.isEmpty()
+                                ? null
+                                : majorChips.get(Math.min(major, majorChips.size() - 1)));
         View activeSub =
                 subChips.isEmpty() ? null : subChips.get(Math.min(sub, subChips.size() - 1));
         linkHorizontal(majorChips);

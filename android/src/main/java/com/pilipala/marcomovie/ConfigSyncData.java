@@ -2,8 +2,6 @@ package com.pilipala.marcomovie;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.util.Base64;
 
 import com.pilipala.marcomovie.adblur.AdBlurConfig;
@@ -34,7 +32,8 @@ import java.util.Set;
  *   <li>adskip：口播广告关键词 / 灵敏度 / 跳过时长；</li>
  *   <li>safety：NSFW 过滤开关与额外关键词（不含 PIN，PIN 属设备级密钥，不跨设备同步）；</li>
  *   <li>prefs：通用界面 / 播放设置（仅 {@link Prefs#KEYS} 白名单内的键，带类型）；</li>
- *   <li>templates：用户框选的特征图（PNG 转 base64，先清空电视旧模板再写入）。</li>
+ *   <li>templates：用户框选的特征图（PNG 原字节转 base64 + .meta 标定文本，
+ *       接收端原样落盘保留文件名；只有确实收到模板时才整体替换电视旧模板）。</li>
  * </ul>
  *
  * <p>不含：影视源 / 站点选择 / 历史记录 / 账号类数据。
@@ -198,23 +197,33 @@ final class ConfigSyncData {
         }
         if (root.has("templates")) {
             JSONArray tpls = root.getJSONArray("templates");
-            AdBlurTemplates.clear(ctx);
-            for (int i = 0; i < tpls.length(); i++) {
-                JSONObject t = tpls.getJSONObject(i);
-                String name = t.optString("name", "tpl");
-                if (name.endsWith(".png")) name = name.substring(0, name.length() - 4);
-                String data = t.optString("data", "");
-                if (data.isEmpty()) continue;
-                byte[] bytes = Base64.decode(data, Base64.NO_WRAP);
-                Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                if (bmp == null) continue;
-                String saved = AdBlurTemplates.save(ctx, bmp, name);
-                if (saved != null) {
+            // 手机端一个模板都没有时不要清空电视上已有的模板：用户可能只是想同步设置参数，
+            // 或者误点了同步。只有确实收到模板数组内容时才做整体替换。
+            if (tpls.length() > 0) {
+                AdBlurTemplates.clear(ctx);
+                int written = 0, usable = 0;
+                for (int i = 0; i < tpls.length(); i++) {
+                    JSONObject t = tpls.getJSONObject(i);
+                    String name = t.optString("name", "");
+                    String data = t.optString("data", "");
+                    if (data.isEmpty()) continue;
                     String meta = t.optString("meta", "");
-                    if (!meta.isEmpty()) AdBlurTemplates.writeMeta(ctx, saved, meta);
+                    byte[] bytes;
+                    try {
+                        bytes = Base64.decode(data, Base64.NO_WRAP);
+                    } catch (IllegalArgumentException bad) {
+                        continue;
+                    }
+                    if (AdBlurTemplates.saveRaw(
+                            ctx, name, bytes, meta.isEmpty() ? null : meta)) {
+                        written++;
+                        if (AdBlurTemplates.Meta.decode(meta) != null) usable++;
+                    }
                 }
-                bmp.recycle();
-                count++;
+                android.util.Log.i(
+                        "AdBlur",
+                        "templates synced: written=" + written + " withMeta=" + usable);
+                count += written;
             }
         }
         return count;

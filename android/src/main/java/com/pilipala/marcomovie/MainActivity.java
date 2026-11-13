@@ -1268,7 +1268,8 @@ public final class MainActivity extends Activity {
                             // 首页主体已是豆瓣瀑布流：优先聚焦「电视剧」tab；旧分类瀑布流的标签仅作兜底
                             first = root.findViewWithTag("douban-tab:0");
                             if (first == null) first = root.findViewWithTag("home-tab:0");
-                            if (first == null) first = root.findViewWithTag("source-switcher");
+                            if (first == null)
+                                first = root.findViewWithTag("douban-major-switcher");
                         }
                         if (first == null) first = root.findViewWithTag("nav-home");
                         if (first == null) {
@@ -1818,7 +1819,7 @@ public final class MainActivity extends Activity {
         if (current == null || !current.home || scroll == null) return;
         View target = root.findViewWithTag("home-history:0");
         if (target == null) target = root.findViewWithTag("home-tab:0");
-        if (target == null) target = root.findViewWithTag("source-switcher");
+        if (target == null) target = root.findViewWithTag("douban-major-switcher");
         if (target == null) target = root.findViewWithTag("primary");
         if (target != null) target.requestFocus();
         current.scroll = 0;

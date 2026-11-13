@@ -25,6 +25,7 @@ import com.google.zxing.LuminanceSource;
 import com.google.zxing.MultiFormatReader;
 import com.google.zxing.PlanarYUVLuminanceSource;
 import com.google.zxing.common.HybridBinarizer;
+import com.pilipala.marcomovie.adblur.AdBlurTemplates;
 
 import org.json.JSONObject;
 
@@ -77,6 +78,20 @@ public class SyncScanActivity extends Activity
         title.setTextSize(18);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
         bar.addView(title);
+
+        int[] stats = AdBlurTemplates.stats(this);
+        TextView inventory = new TextView(this);
+        inventory.setText(
+                "本机待推送的特征图 "
+                        + stats[0]
+                        + " 个（"
+                        + stats[1]
+                        + " 个带定位信息）· 电视无需截图");
+        inventory.setTextColor(0xff7dd3fc);
+        inventory.setTextSize(13);
+        inventory.setGravity(android.view.Gravity.CENTER);
+        inventory.setPadding(0, dp(8), 0, 0);
+        bar.addView(inventory);
 
         status = new TextView(this);
         status.setText("将电视二维码置于取景框内");
@@ -270,6 +285,10 @@ public class SyncScanActivity extends Activity
                         () -> {
                             try {
                                 JSONObject payload = ConfigSyncData.build(this);
+                                final int tplCount =
+                                        payload.optJSONArray("templates") == null
+                                                ? 0
+                                                : payload.optJSONArray("templates").length();
                                 byte[] body = payload.toString().getBytes("UTF-8");
                                 URL u = new URL(address);
                                 HttpURLConnection conn = (HttpURLConnection) u.openConnection();
@@ -299,7 +318,13 @@ public class SyncScanActivity extends Activity
                                             syncing = false;
                                             Toast.makeText(
                                                             this,
-                                                            (ok ? "已同步到电视：" : "同步失败(" + code + ")：")
+                                                            (ok
+                                                                            ? "已同步到电视（"
+                                                                                    + tplCount
+                                                                                    + " 个特征图）："
+                                                                            : "同步失败("
+                                                                                    + code
+                                                                                    + ")：")
                                                                     + msg,
                                                             Toast.LENGTH_LONG)
                                                     .show();

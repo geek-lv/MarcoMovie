@@ -15,6 +15,7 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
 import com.pilipala.marcomovie.adblur.AdBlurController;
+import com.pilipala.marcomovie.adblur.AdBlurTemplates;
 import com.pilipala.marcomovie.adskip.AdSkipController;
 
 import java.util.Locale;
@@ -27,6 +28,7 @@ public class SyncQrActivity extends Activity {
 
     private ConfigSyncServer server;
     private final Handler ui = new Handler(Looper.getMainLooper());
+    private TextView inventory;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,7 +40,7 @@ public class SyncQrActivity extends Activity {
         root.setPadding(dp(28), dp(36), dp(28), dp(36));
 
         TextView title = new TextView(this);
-        title.setText("手机扫码同步配置到电视");
+        title.setText("手机扫码同步牛皮癣模板到电视");
         title.setTextColor(Color.WHITE);
         title.setTextSize(22);
         title.setTypeface(null, android.graphics.Typeface.BOLD);
@@ -65,12 +67,23 @@ public class SyncQrActivity extends Activity {
             root.addView(url);
 
             TextView note = new TextView(this);
-            note.setText("保持本页面打开，用手机「设置 → 视频牛皮癣模糊 → 同步到电视」扫码并推送。");
+            note.setText(
+                    "保持本页面打开，用手机「设置 → 视频牛皮癣模糊 → 同步到电视」扫码。"
+                            + "手机框选保存的牛皮癣特征图（含定位信息）会连同设置一起推送到本机，"
+                            + "电视端无需截图采集。");
             note.setTextColor(0xffbfbfc7);
             note.setTextSize(14);
             note.setGravity(android.view.Gravity.CENTER);
             note.setPadding(0, dp(16), 0, 0);
             root.addView(note);
+
+            inventory = new TextView(this);
+            inventory.setTextColor(0xff7dd3fc);
+            inventory.setTextSize(14);
+            inventory.setGravity(android.view.Gravity.CENTER);
+            inventory.setPadding(0, dp(14), 0, 0);
+            root.addView(inventory);
+            refreshInventory();
 
             TextView exp = new TextView(this);
             exp.setText("二维码有效 5 分钟 · 关闭后停止接收");
@@ -94,12 +107,33 @@ public class SyncQrActivity extends Activity {
     private void applyConfig(String json) {
         try {
             int n = ConfigSyncData.apply(this, json);
-            toast("已接收并应用 " + n + " 项配置");
+            int[] stats = AdBlurTemplates.stats(this);
+            refreshInventory();
+            toast(
+                    "已接收 "
+                            + stats[0]
+                            + " 个牛皮癣模板（"
+                            + stats[1]
+                            + " 个带定位信息）· 共应用 "
+                            + n
+                            + " 项配置");
+            // 模板目录整体替换后必须重建特效，否则播放器仍持有旧的 GPU 模板纹理
             AdBlurController.get(this).notifyTemplatesChanged();
             AdSkipController.get().onConfigChanged(this);
         } catch (Exception e) {
             toast("同步失败：" + e.getMessage());
         }
+    }
+
+    private void refreshInventory() {
+        if (inventory == null) return;
+        int[] stats = AdBlurTemplates.stats(this);
+        inventory.setText(
+                "本机现有特征图 "
+                        + stats[0]
+                        + " 个（"
+                        + stats[1]
+                        + " 个带定位信息，可用于模糊）");
     }
 
     @Override

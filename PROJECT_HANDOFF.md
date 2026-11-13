@@ -4,23 +4,11 @@
 
 - 本机项目目录：`/Users/lvzhaobing/workspace/marcomovie`
 - 当前分支：`develop`
-- 当前 HEAD：`f368d8833acc12c4c6e2c5ee8077a255871cf302`
+- 当前 HEAD 以 `git log -1` 为准；版本号唯一真值来源是 `android/edition-versions.json`。
 - 个人仓库：`mine = git@github.com:geek-lv/MarcoMovie.git`
 - 上游仓库：`origin = https://github.com/Pilipala9919/MarcoMovie.git`
-- `mine/main` 目前在 `f368d88`。
-- 当前所有手机端新改动均未提交、未推送，不要直接 reset 或 clean。
-
-本地有 5 个已修改文件：
-
-```text
-android/edition-versions.json
-android/src/main/java/com/pilipala/marcomovie/DoubanHot.java
-android/src/main/java/com/pilipala/marcomovie/ImageLoader.java
-android/src/main/java/com/pilipala/marcomovie/MainActivity.java
-android/src/main/java/com/pilipala/marcomovie/MobileShell.java
-```
-
-其中混合了此前的 0.5.17 修改和本轮性能改造，不是一个可以随便丢弃的独立补丁。
+- 0.5.26（手机 UI / 豆瓣片单 / 牛皮癣模糊全链路）已在 `3f41daf` 提交、经 `9cfd212` 合并后推送到 `mine/develop`，不是未提交补丁；不要 reset 或 clean。
+- 0.5.27 起 TV 与手机端共用同一份 `adblur` 代码，模板只从手机扫码同步到电视（电视不提供采集入口）。
 
 不要提交：
 
@@ -36,8 +24,8 @@ Android 部分主要采用 Java + 手写 Android View，不是 Compose，也没�
 
 当前版本：
 
-- Android TV：`0.5.13 / vCode 66`
-- Android 手机版：`0.5.17 / vCode 69`
+- Android TV：`0.5.27 / vCode 79`
+- Android 手机版：`0.5.27 / vCode 79`
 - minSdk 23，targetSdk 28
 
 关键文件：
@@ -46,13 +34,16 @@ Android 部分主要采用 Java + 手写 Android View，不是 Compose，也没�
 - `MobileShell.java`：手机主页、搜索、直播、片库、设置及底部导航。
 - `MainActivity.java`：页面栈、返回逻辑、窗口尺寸重排和全局图片代次。
 - `ImageLoader.java`：海报缓存、异步加载、请求取消及图片回显。
-- `HomeScreen.java`：TV 首页，仍保留豆瓣大类行和细分行。
+- `HomeScreen.java`：TV 首页，顶部「剧集 / 电影 / 综艺」下拉 + 一行细分榜单 + 豆瓣海报网格；首页无线路切换按钮。
+- `adblur/*`：TV / 手机共用的牛皮癣识别与 GL 模糊；`ConfigSyncData.java` + `SyncQrActivity` / `SyncScanActivity` 负责手机把模板（PNG 原字节 + .meta）扫码同步到电视。
 
 ## 3. 已完成并提交的历史工作
 
 近期提交包括：
 
 ```text
+9cfd212 merge: 保留本地 0.5.26 主线（远端 develop 为同源重复分叉）
+3f41daf feat(mobile): UI 稳定性、豆瓣片单与视频牛皮癣模糊识别（0.5.17 → 0.5.26）
 f368d88 fix(ci): pass API 23 callback and JVM fixture checks
 6f844f6 fix(rebase): drop upstream hero-banner leftovers from mobile home
 2cf2ace fix(tv): settings row double-touch on TV layout + poster load logging
