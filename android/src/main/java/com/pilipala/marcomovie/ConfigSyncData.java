@@ -54,11 +54,13 @@ final class ConfigSyncData {
         JSONObject adblur = new JSONObject();
         adblur.put("enabled", AdBlurConfig.isEnabled());
         adblur.put("blur_radius", AdBlurConfig.getBlurRadius());
-        adblur.put("detect_every_n", AdBlurConfig.getDetectEveryN());
+        adblur.put("blur_style", AdBlurConfig.getBlurStyle());
+        adblur.put("min_confidence", AdBlurConfig.getMinConfidence());
+        adblur.put("detect_every_n", AdBlurConfig.getDetectEveryN()); // 兼容旧电视
+        adblur.put("detect_interval_ms", AdBlurConfig.getDetectIntervalMs());
         adblur.put("match_threshold", AdBlurConfig.getMatchThreshold());
         adblur.put("scale_max", AdBlurConfig.getScaleMax());
         adblur.put("feather", AdBlurConfig.getFeather());
-        adblur.put("use_zxing", AdBlurConfig.isUseZxing());
         root.put("adblur", adblur);
 
         JSONObject adskip = new JSONObject();
@@ -112,6 +114,8 @@ final class ConfigSyncData {
             JSONObject t = new JSONObject();
             t.put("name", name);
             t.put("data", Base64.encodeToString(bytes, Base64.NO_WRAP));
+            AdBlurTemplates.Meta meta = AdBlurTemplates.readMeta(ctx, name);
+            if (meta != null) t.put("meta", meta.encode());
             tpls.put(t);
         }
         root.put("templates", tpls);
@@ -128,12 +132,20 @@ final class ConfigSyncData {
             JSONObject a = root.getJSONObject("adblur");
             if (a.has("enabled")) AdBlurConfig.setEnabled(a.getBoolean("enabled"));
             if (a.has("blur_radius")) AdBlurConfig.setBlurRadius(a.getInt("blur_radius"));
-            if (a.has("detect_every_n")) AdBlurConfig.setDetectEveryN(a.getInt("detect_every_n"));
+            if (a.has("blur_style")) AdBlurConfig.setBlurStyle(a.getInt("blur_style"));
+            if (a.has("min_confidence"))
+                AdBlurConfig.setMinConfidence(a.getInt("min_confidence"));
+            if (a.has("detect_interval_ms")) {
+                AdBlurConfig.setDetectIntervalMs(a.getInt("detect_interval_ms"));
+            } else if (a.has("detect_every_n")) {
+                // 旧快照按帧数存储，按 30fps 近似换算成 ms
+                AdBlurConfig.setDetectIntervalMs(
+                        Math.max(100, a.getInt("detect_every_n") * 1000 / 30));
+            }
             if (a.has("match_threshold"))
                 AdBlurConfig.setMatchThreshold((float) a.getDouble("match_threshold"));
             if (a.has("scale_max")) AdBlurConfig.setScaleMax(a.getInt("scale_max"));
             if (a.has("feather")) AdBlurConfig.setFeather((float) a.getDouble("feather"));
-            if (a.has("use_zxing")) AdBlurConfig.setUseZxing(a.getBoolean("use_zxing"));
             count++;
         }
         if (root.has("adskip")) {
@@ -190,12 +202,17 @@ final class ConfigSyncData {
             for (int i = 0; i < tpls.length(); i++) {
                 JSONObject t = tpls.getJSONObject(i);
                 String name = t.optString("name", "tpl");
+                if (name.endsWith(".png")) name = name.substring(0, name.length() - 4);
                 String data = t.optString("data", "");
                 if (data.isEmpty()) continue;
                 byte[] bytes = Base64.decode(data, Base64.NO_WRAP);
                 Bitmap bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
                 if (bmp == null) continue;
-                AdBlurTemplates.save(ctx, bmp, name);
+                String saved = AdBlurTemplates.save(ctx, bmp, name);
+                if (saved != null) {
+                    String meta = t.optString("meta", "");
+                    if (!meta.isEmpty()) AdBlurTemplates.writeMeta(ctx, saved, meta);
+                }
                 bmp.recycle();
                 count++;
             }

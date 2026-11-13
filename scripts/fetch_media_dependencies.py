@@ -63,7 +63,7 @@ def resolve(g,a,v):
     m=model(g,a,v)
     for dg,da,dv in m['deps']:resolve(dg,da,dv)
 def main():
-    for a in ('media3-exoplayer','media3-exoplayer-hls','media3-exoplayer-dash','media3-ui','media3-exoplayer-rtsp'):resolve('androidx.media3',a,'1.5.1')
+    for a in ('media3-exoplayer','media3-exoplayer-hls','media3-exoplayer-dash','media3-ui','media3-exoplayer-rtsp','media3-effect'):resolve('androidx.media3',a,'1.11.1')
     # Annotation 1.6 publishes multiplatform metadata; Java consumes its JVM variant.
     resolve('androidx.annotation','annotation-jvm','1.6.0')
     locked=[]

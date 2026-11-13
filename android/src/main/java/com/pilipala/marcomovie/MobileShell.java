@@ -30,6 +30,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Future;
+import com.pilipala.marcomovie.adblur.AdBlurConfig;
+import com.pilipala.marcomovie.adblur.AdBlurTemplates;
 import com.pilipala.marcomovie.adskip.AdSkipConfig;
 import com.pilipala.marcomovie.safety.ContentFilterConfig;
 import com.pilipala.marcomovie.safety.ContentGate;
@@ -52,6 +54,13 @@ import org.json.JSONObject;
 final class MobileShell {
     static int activeTab = 0;
     static String pendingSearchKeyword = "";
+
+    /**
+     * 由 renderSearchTab() 赋值：把 pendingSearchKeyword 应用到已存在的搜索页（填充输入框 +
+     * 恢复缓存结果或触发新搜索）。首次创建搜索页时 renderSearchTab 内部直接消费；
+     * 再次点击首页封面时页签已存在，switchTab(1) 通过它消费新的关键字。
+     */
+    private Runnable pendingKeywordApplier;
 
     /** Persistent search session state so returning from Detail keeps search results resident. */
     static final class CachedSearchHit {
@@ -83,6 +92,8 @@ final class MobileShell {
 
     private final MainActivity a;
     private FrameLayout contentContainer;
+    private FrameLayout tabHost;
+    private final FrameLayout[] tabPages = new FrameLayout[5];
     private final View[] navTabs = new View[5];
     private final TextView[] navLabels = new TextView[5];
     private final NavGlyph[] navIcons = new NavGlyph[5];
@@ -104,11 +115,24 @@ final class MobileShell {
     private boolean homeReady;
     private Runnable resumeHome;
     Runnable reloadCategory;
+
+    /** 豆瓣大类提升到顶栏；跨主页重建记住选择，片单区只保留细分行。 */
+    private static int doubanMajor;
+
+    private DoubanHot doubanGrid;
+    private TextView doubanMajorPill;
     private FrameLayout retainedRoot;
     private int retainedWidth, retainedHeight, retainedEpoch;
     private boolean renderedPortrait = true;
 
     boolean resume() {
+        MainActivity.flicker(
+                "SHELL_RESUME_TRY tab="
+                        + activeTab
+                        + " ready="
+                        + homeReady
+                        + " root="
+                        + System.identityHashCode(retainedRoot));
         if (!homeReady
                 || activeTab != 0
                 || retainedRoot == null
@@ -123,13 +147,33 @@ final class MobileShell {
         ++homeRequest;
         if (resumeHome != null) resumeHome.run();
         a.root = retainedRoot;
+        MainActivity.flicker(
+                "SHELL_RESUME_SET_CONTENT root="
+                        + System.identityHashCode(retainedRoot)
+                        + " generation="
+                        + (a.generation + 1));
         a.setContentView(retainedRoot);
         a.watchRootLayout(retainedRoot);
         a.applyMobileSystemBars(false);
         a.scroll = homeScroll;
         a.body = homeBody;
+        resumeMissingPosters(retainedRoot);
         if (a.current != null) a.current.home = true;
         return true;
+    }
+
+    /** 保留首页恢复时，仅补加载此前被取消且仍未显示的图片，不重建卡片。 */
+    private void resumeMissingPosters(View view) {
+        if (view instanceof ImageView
+                && ((ImageView) view).getDrawable() == null
+                && view.getTag() instanceof String) {
+            a.poster((String) view.getTag(), (ImageView) view);
+        }
+        if (view instanceof android.view.ViewGroup) {
+            android.view.ViewGroup group = (android.view.ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++)
+                resumeMissingPosters(group.getChildAt(i));
+        }
     }
 
     MobileShell(MainActivity activity) {
@@ -155,6 +199,9 @@ final class MobileShell {
                                 new MobileShell(a).render();
                             }),
                     pushBack);
+        } else if (a.current.mobileHome != null) {
+            // 同一个主页内切到搜索，保留豆瓣网格及其封面/分页/滚动位置。
+            a.current.mobileHome.switchTab(1);
         } else {
             new MobileShell(a).render();
         }
@@ -500,6 +547,9 @@ final class MobileShell {
     }
 
     void render() {
+        MainActivity.flickerStack(
+                "SHELL_RENDER tab=" + activeTab + " shell=" + System.identityHashCode(this));
+        a.shellRendering = true; // 阻止 onLayoutChange 在渲染期间递归调用 MobileShell.show(a)
         a.clearPlaybackLoading();
         a.cancelArtwork();
         a.cancelPageRequests();
@@ -520,6 +570,11 @@ final class MobileShell {
 
         a.root = new FrameLayout(a);
         a.root.setBackgroundColor(0xff070c0a);
+        MainActivity.flicker(
+                "SHELL_SET_CONTENT root="
+                        + System.identityHashCode(a.root)
+                        + " generation="
+                        + a.generation);
         a.setContentView(a.root);
         a.watchRootLayout(a.root);
         renderedPortrait = a.isPortrait();
@@ -529,8 +584,12 @@ final class MobileShell {
                 (view, l, t, r, b, ol, ot, or, ob) -> {
                     int w = r - l, h = b - t;
                     if (w <= 0 || h <= 0 || a.root != shellRoot) return;
-                    a.usableWidth = w;
-                    a.usableHeight = h;
+                    // 不在此更新 usableWidth/Height：视图尺寸（1080x1824，含状态栏）与窗口尺寸
+                    // （1080x1920）不一致，覆盖会导致 onWindowSizeChanged 反复 SIZE_CANDIDATE →
+                    // relayoutSettleCheck → scheduleOrientationRelayout → refresh →
+                    // MobileShell.show
+                    // → render → setContentView 无限循环。usableWidth/Height 由 onWindowSizeChanged 统一管理。
+                    if (a.shellRendering) return; // 渲染期间跳过方向检测，防止递归重建
                     if ((w < h) != builtPortrait) {
                         a.ui.post(
                                 () -> {
@@ -538,11 +597,17 @@ final class MobileShell {
                                             && !a.isDestroyed()
                                             && a.root == shellRoot
                                             && a.current != null
-                                            && a.current.home) {
+                                            && a.current.home
+                                            && !a.shellRendering) {
                                         MobileShell.show(a);
                                     }
                                 });
                     }
+                });
+        // 首次布局完成后解除渲染保护
+        shellRoot.post(
+                () -> {
+                    a.shellRendering = false;
                 });
 
         // Layer 0: iOS 27 Emerald-Obsidian Ambient Background
@@ -602,6 +667,7 @@ final class MobileShell {
             a.root.addView(bottomDock, dockLp);
         }
 
+        tabHost = contentContainer;
         switchTab(activeTab);
         retainedRoot = a.root;
         retainedWidth = a.windowWidth();
@@ -689,26 +755,35 @@ final class MobileShell {
         slotLp.rightMargin = a.dp(6);
         bar.addView(siteSlot, slotLp);
 
-        // Right 1: Site selector Liquid Glass capsule (`source-switcher`)
-        String siteLabel = currentSite != null ? currentSite.name + " ▾" : "选择片源 ▾";
-        TextView sitePill = a.text(siteLabel, 12.5f, Color.WHITE);
-        sitePill.setTag("source-switcher");
-        sitePill.setTypeface(null, Typeface.BOLD);
-        sitePill.setSingleLine(true);
-        sitePill.setEllipsize(TextUtils.TruncateAt.END);
+        // Right 1: 豆瓣大类入口。片源切换仍在设置页，首页不再放一个对豆瓣搜索无意义的线路按钮。
+        String[] majorLabels = DoubanHot.majorLabels();
+        doubanMajor = Math.max(0, Math.min(doubanMajor, majorLabels.length - 1));
+        doubanMajorPill = a.text(majorLabels[doubanMajor] + " ▾", 12.5f, Color.WHITE);
+        doubanMajorPill.setTag("douban-major-switcher");
+        doubanMajorPill.setTypeface(null, Typeface.BOLD);
+        doubanMajorPill.setSingleLine(true);
+        doubanMajorPill.setEllipsize(TextUtils.TruncateAt.END);
         int maxSiteWidth = Math.max(a.dp(48), Math.min(a.dp(136), a.windowWidth() - a.dp(250)));
-        sitePill.setMaxWidth(maxSiteWidth);
-        sitePill.setGravity(Gravity.CENTER);
-        sitePill.setPadding(a.dp(11), a.dp(7), a.dp(11), a.dp(7));
-        a.glass(sitePill, 999);
-        MobileDetailScreen.bindTouchFeedback(sitePill);
-        sitePill.setOnClickListener(
-                v -> {
-                    if (a.config == null) showMobileImportDialog(a);
-                    else a.chooseSources();
-                });
+        doubanMajorPill.setMaxWidth(maxSiteWidth);
+        doubanMajorPill.setGravity(Gravity.CENTER);
+        doubanMajorPill.setPadding(a.dp(11), a.dp(7), a.dp(11), a.dp(7));
+        a.glass(doubanMajorPill, 999);
+        MobileDetailScreen.bindTouchFeedback(doubanMajorPill);
+        doubanMajorPill.setOnClickListener(
+                v ->
+                        showDrawerPicker(
+                                a,
+                                "豆瓣片单",
+                                "选择大类，下方继续选择细分榜单",
+                                majorLabels,
+                                doubanMajor,
+                                index -> {
+                                    doubanMajor = index;
+                                    doubanMajorPill.setText(majorLabels[index] + " ▾");
+                                    if (doubanGrid != null) doubanGrid.selectMajor(index);
+                                }));
         siteSlot.addView(
-                sitePill,
+                doubanMajorPill,
                 new FrameLayout.LayoutParams(-2, a.dp(34), Gravity.END | Gravity.CENTER_VERTICAL));
 
         // Right 2: Netdisk / Config Liquid Glass capsule
@@ -809,6 +884,8 @@ final class MobileShell {
                         if (action == android.view.MotionEvent.ACTION_UP
                                 || action == android.view.MotionEvent.ACTION_CANCEL) {
                             sliding = false;
+                            MainActivity.flicker(
+                                    "NAV_DOCK_TOUCH action=" + action + " pending=" + pendingTab);
                             if (action == android.view.MotionEvent.ACTION_UP && pendingTab >= 0)
                                 switchTab(pendingTab);
                             pendingTab = -1;
@@ -846,7 +923,11 @@ final class MobileShell {
             navLabels[tabIdx] = label;
             tab.addView(label, new LinearLayout.LayoutParams(-2, -2));
 
-            tab.setOnClickListener(v -> switchTab(tabIdx));
+            tab.setOnClickListener(
+                    v -> {
+                        MainActivity.flicker("NAV_CLICK tab=" + tabIdx);
+                        switchTab(tabIdx);
+                    });
             navTabs[tabIdx] = tab;
 
             LinearLayout.LayoutParams lp =
@@ -861,15 +942,24 @@ final class MobileShell {
     private int homeScrollY;
     private ScrollView homeScroll;
     private LinearLayout homeBody;
+    private FrameLayout homeTabContent;
 
     void switchTab(int index) {
+        MainActivity.flicker(
+                "TAB_SWITCH from="
+                        + activeTab
+                        + " to="
+                        + index
+                        + " generation="
+                        + a.generation
+                        + " shell="
+                        + System.identityHashCode(this));
         ++homeRequest;
         homeReady = false;
-        ++a.generation;
         if (activeTab == 0 && homeScroll != null) homeScrollY = homeScroll.getScrollY();
         activeTab = Math.max(0, Math.min(4, index));
         a.cancelPageRequests();
-        // When on Search tab (1), highlight Home (0) in the 4-tab dock
+        // 页签切换只隐藏/显示各自页面，不再 removeAllViews，也不递增全局图片代次。
         int highlightedDockTab = activeTab == 1 ? 0 : activeTab;
         for (int pos = 0; pos < DOCK_TAB_INDICES.length; pos++) {
             int i = DOCK_TAB_INDICES[pos];
@@ -890,24 +980,60 @@ final class MobileShell {
                 navIcons[i].setSelectedState(selected);
             }
         }
-        contentContainer.removeAllViews();
+        if (tabHost == null) return;
+        for (FrameLayout tabPage : tabPages) if (tabPage != null) tabPage.setVisibility(View.GONE);
+        boolean create = tabPages[activeTab] == null;
+        if (create) {
+            tabPages[activeTab] = new FrameLayout(a);
+            tabHost.addView(tabPages[activeTab], new FrameLayout.LayoutParams(-1, -1));
+        }
+        contentContainer = tabPages[activeTab];
+        contentContainer.setVisibility(View.VISIBLE);
         switch (activeTab) {
             case 0:
-                renderHomeTab();
+                if (create) {
+                    renderHomeTab();
+                } else {
+                    a.scroll = homeScroll;
+                    a.body = homeBody;
+                    if (homeTabContent != null) {
+                        // 同步设置滚动位置，避免 VISIBLE→布局→post 之间出现一帧滚动跳变造成闪烁。
+                        homeScroll.scrollTo(0, homeScrollY);
+                        MainActivity.flicker(
+                                "TAB_SCROLL_RESTORE y="
+                                        + homeScrollY
+                                        + " scrollY="
+                                        + homeScroll.getScrollY());
+                        homeTabContent.post(() -> homeScroll.scrollTo(0, homeScrollY));
+                        resumeMissingPosters(homeTabContent);
+                    }
+                    if (doubanGrid != null) doubanGrid.resume();
+                    homeReady = homeTabContent != null && homeScroll != null && homeBody != null;
+                }
                 break;
             case 1:
-                renderSearchTab();
+                if (create) renderSearchTab();
+                else if (pendingKeywordApplier != null) pendingKeywordApplier.run();
                 break;
             case 2:
-                renderLiveTab();
+                if (create) renderLiveTab();
                 break;
             case 3:
-                renderMyTab();
+                if (create) renderMyTab();
                 break;
             case 4:
-                renderSettingsTab();
+                if (create) renderSettingsTab();
                 break;
         }
+        MainActivity.flicker(
+                "TAB_VISIBLE tab="
+                        + activeTab
+                        + " create="
+                        + create
+                        + " page="
+                        + System.identityHashCode(contentContainer)
+                        + " hostChildren="
+                        + tabHost.getChildCount());
     }
 
     // =========================================================================
@@ -945,6 +1071,8 @@ final class MobileShell {
                     public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
                         int action = ev.getActionMasked();
                         if (action == android.view.MotionEvent.ACTION_DOWN) {
+                            MainActivity.flicker(
+                                    "PULL_DOWN scrollY=" + getScrollY() + " rawY=" + ev.getRawY());
                             startX = ev.getRawX();
                             startY = ev.getRawY();
                             trackingTopPull = getScrollY() <= 0;
@@ -966,6 +1094,7 @@ final class MobileShell {
                                         && dy > Math.abs(dx) * 1.2f
                                         && getScrollY() <= 0) {
                                     pullingDown = true;
+                                    MainActivity.flicker("PULL_BEGIN dy=" + dy);
                                 }
                                 if (pullingDown) {
                                     currentPullOffset =
@@ -993,6 +1122,13 @@ final class MobileShell {
                                                 && currentPullOffset >= pullThreshold;
                                 pullingDown = false;
                                 trackingTopPull = false;
+                                MainActivity.flicker(
+                                        "PULL_END action="
+                                                + action
+                                                + " offset="
+                                                + currentPullOffset
+                                                + " refresh="
+                                                + shouldRefresh);
                                 currentPullOffset = 0f;
                                 body.animate().translationY(0f).setDuration(180).start();
                                 if (shouldRefresh && triggerPullRefresh[0] != null) {
@@ -1016,11 +1152,14 @@ final class MobileShell {
         scrollView.setVerticalScrollBarEnabled(false);
         scrollView.setClipToPadding(false);
         a.scroll = scrollView;
-        contentContainer.addView(scrollView, new FrameLayout.LayoutParams(-1, -1));
+        FrameLayout homePage = new FrameLayout(a);
+        homePage.addView(scrollView, new FrameLayout.LayoutParams(-1, -1));
         FrameLayout.LayoutParams badgeLp =
                 new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
         badgeLp.topMargin = statusBarHeight() + a.dp(10);
-        contentContainer.addView(pullRefreshBadge, badgeLp);
+        homePage.addView(pullRefreshBadge, badgeLp);
+        homeTabContent = homePage;
+        contentContainer.addView(homePage, new FrameLayout.LayoutParams(-1, -1));
 
         a.body = body;
         homeBody = body;
@@ -1115,385 +1254,27 @@ final class MobileShell {
             body.addView(histScroll, new LinearLayout.LayoutParams(-1, -2));
         }
 
-        // 3. 豆瓣热播榜货架（独立于当前片源，占据首页首屏原「今日首推」的位置）
-        DoubanHot.attach(a, body);
-
-        // 3. Horizontal Scrollable Category Pill Bar
-        HorizontalScrollView catScroll = new HorizontalScrollView(a);
-        catScroll.setHorizontalScrollBarEnabled(false);
-        catScroll.setClipChildren(true);
-        catScroll.setClipToPadding(false);
-        catScroll.setPadding(a.dp(16), a.dp(14), a.dp(8), a.dp(10));
-        catScroll
-                .getViewTreeObserver()
-                .addOnScrollChangedListener(
-                        () -> {
-                            if (catScroll.getWidth() > 0) {
-                                cachedCatScrollX = catScroll.getScrollX();
-                            }
-                        });
-        final LinearLayout catRow = a.row();
-        catRow.setGravity(Gravity.CENTER_VERTICAL);
-        catScroll.addView(catRow);
-        LinearLayout categoryBar = a.row();
-        categoryBar.setClipChildren(true);
-        categoryBar.setGravity(Gravity.CENTER_VERTICAL);
-        categoryBar.addView(catScroll, new LinearLayout.LayoutParams(0, -2, 1));
-        float navScale = Prefs.clampNavScale(a.prefs.getInt(Prefs.NAV_SCALE_PERCENT, 100)) / 100f;
-        TextView filterButton = a.text("筛选", 13 * navScale, MainActivity.WHITE);
-        filterButton.setTag("home-filters");
-        filterButton.setSingleLine(true);
-        filterButton.setGravity(Gravity.CENTER);
-        filterButton.setPadding(
-                a.dp(14 * navScale), a.dp(9 * navScale), a.dp(14 * navScale), a.dp(9 * navScale));
-        a.glass(filterButton, 999);
-        LinearLayout.LayoutParams filterSize = new LinearLayout.LayoutParams(-2, -2);
-        filterSize.leftMargin = a.dp(8);
-        filterSize.rightMargin = a.dp(16);
-        filterSize.topMargin = a.dp(2);
-        categoryBar.addView(filterButton, filterSize);
-        body.addView(categoryBar, new LinearLayout.LayoutParams(-1, -2));
-
-        // 5. Status & 3-Column Poster Grid Container
-        final TextView statusText = a.text("正在加载片单…", 13, MainActivity.MUTED);
-        statusText.setGravity(Gravity.CENTER);
-        statusText.setPadding(a.dp(16), a.dp(24), a.dp(16), a.dp(24));
-        body.addView(statusText, new LinearLayout.LayoutParams(-1, -2));
-
-        final LinearLayout gridContainer = a.vertical();
-        gridContainer.setPadding(a.dp(16), a.dp(2), a.dp(16), 0);
-        body.addView(gridContainer, new LinearLayout.LayoutParams(-1, -2));
-
-        final TextView loadMoreBtn = a.text("加载更多影片", 13.5f, MainActivity.WHITE);
-        loadMoreBtn.setTag("home-load-more");
-        loadMoreBtn.setTypeface(null, Typeface.BOLD);
-        loadMoreBtn.setGravity(Gravity.CENTER);
-        loadMoreBtn.setPadding(a.dp(20), a.dp(11), a.dp(20), a.dp(11));
-        loadMoreBtn.setBackground(
-                glassBg(0xcc262e2b, 0xb81a211f, a.dp(999), a.dp(0.8f), 0x33ffffff));
-        loadMoreBtn.setVisibility(View.GONE);
-        MobileDetailScreen.bindTouchFeedback(loadMoreBtn);
-        LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(-1, -2);
-        moreLp.setMargins(a.dp(16), a.dp(14), a.dp(16), a.dp(8));
-        body.addView(loadMoreBtn, moreLp);
-
-        final boolean[] loadingPage = {false};
-        final boolean[] pageFailed = {false};
-        final int[] completedPage = {0};
-        resumeHome =
-                () -> {
-                    // 「今日首推」hero 卡已随 552b1cc 移除，首页顶部固定位由豆瓣热播货架承担
-                    if (!loadingPage[0]) return;
-                    loadingPage[0] = false;
-                    pageFailed[0] = false;
-                    currentPage = Math.max(1, completedPage[0]);
-                    loadMoreBtn.setVisibility(currentPage < totalPages ? View.VISIBLE : View.GONE);
-                    loadMoreBtn.setText("加载更多影片 (" + currentPage + "/" + totalPages + ")");
-                };
-        final Runnable[] fetchCategoryPage = new Runnable[1];
-        reloadCategory =
-                () -> {
-                    if (currentSite != null && selectedCategoryId.isEmpty()) {
-                        a.homeData.remove(currentSite.key);
-                    }
-                    currentPage = 1;
-                    if (fetchCategoryPage[0] != null) fetchCategoryPage[0].run();
-                };
+        // 3. 豆瓣片单：大类在右上角，片单区只保留一行细分榜单。
+        int mColumns = 3;
+        float mWidthDp = a.windowWidth() / a.getResources().getDisplayMetrics().density;
+        int mMarginDp = 32;
+        int mPosterW =
+                Math.max(48, (int) ((mWidthDp - mMarginDp - (mColumns - 1) * 14) / mColumns) - 8);
+        doubanGrid = DoubanHot.attachGrid(a, body, mColumns, mPosterW, false, doubanMajor);
+        resumeHome = () -> doubanGrid.resume();
+        reloadCategory = () -> doubanGrid.refresh(null);
         triggerPullRefresh[0] =
-                () -> {
-                    if (loadingPage[0]) {
-                        pullRefreshBadge.setVisibility(View.GONE);
-                        return;
-                    }
-                    if (currentSite != null && selectedCategoryId.isEmpty()) {
-                        a.homeData.remove(currentSite.key);
-                    }
-                    currentPage = 1;
-                    if (fetchCategoryPage[0] != null) fetchCategoryPage[0].run();
-                };
-        final Runnable renderCategoryChips =
-                new Runnable() {
-                    @Override
-                    public void run() {
-                        final int savedCatX =
-                                catScroll.getScrollX() > 0
-                                        ? catScroll.getScrollX()
-                                        : cachedCatScrollX;
-                        boolean configSite = SourceController.isConfigOrNetdiskSite(currentSite);
-                        filterButton.setVisibility(configSite ? View.GONE : View.VISIBLE);
-                        filterButton.setText(
-                                selectedFilters.isEmpty()
-                                        ? "筛选"
-                                        : "筛选 · " + selectedFilters.size());
-                        if (configSite
-                                && selectedCategoryId.isEmpty()
-                                && !currentCategories.isEmpty()) {
-                            selectedCategoryId = currentCategories.get(0).id;
-                        }
-                        catRow.removeAllViews();
-                        if (!configSite || currentCategories.isEmpty()) {
-                            addCategoryChip(catRow, "推荐", "", this, fetchCategoryPage[0]);
-                        }
-                        for (Cms.Category c : currentCategories) {
-                            addCategoryChip(catRow, c.name, c.id, this, fetchCategoryPage[0]);
-                        }
-                        if (savedCatX > 0) {
-                            catScroll.scrollTo(savedCatX, 0);
-                            catScroll.post(() -> catScroll.scrollTo(savedCatX, 0));
-                        }
-                    }
-                };
-
-        filterButton.setOnClickListener(
-                v ->
-                        VideoFilterDialog.show(
-                                a,
-                                mobileFilterDefinitions(),
-                                selectedFilters,
+                () ->
+                        doubanGrid.refresh(
                                 () -> {
-                                    if (selectedCategoryId.isEmpty()
-                                            && !currentCategories.isEmpty()) {
-                                        selectedCategoryId = currentCategories.get(0).id;
-                                        renderCategoryChips.run();
-                                    }
-                                    currentPage = 1;
-                                    filterButton.setText(
-                                            selectedFilters.isEmpty()
-                                                    ? "筛选"
-                                                    : "筛选 · " + selectedFilters.size());
-                                    fetchCategoryPage[0].run();
-                                }));
-        fetchCategoryPage[0] =
-                () -> {
-                    final int request = ++homeRequest;
-                    loadingPage[0] = true;
-                    if (currentPage == 1) {
-                        statusText.setVisibility(View.VISIBLE);
-                        statusText.setText("正在加载…");
-                        loadMoreBtn.setVisibility(View.GONE);
-                    } else {
-                        loadMoreBtn.setVisibility(View.VISIBLE);
-                        loadMoreBtn.setText("正在加载更多…");
-                    }
-                    final Cms.Site siteSnapshot = currentSite;
-                    final String catSnapshot = selectedCategoryId;
-                    final int pageSnapshot = currentPage;
-                    final java.util.Map<String, String> filterSnapshot =
-                            new java.util.LinkedHashMap<>(selectedFilters);
-                    final List<VideoFilters.Definition> definitions = mobileFilterDefinitions();
-                    final int ticket = a.generation;
-                    final HomeScreen.Snapshot cached =
-                            siteSnapshot == null ? null : a.homeData.get(siteSnapshot.key);
-                    if (catSnapshot.isEmpty() && pageSnapshot == 1 && siteSnapshot != null) {
-                        a.prefs.edit().putString(Prefs.LOADING_SITE, siteSnapshot.key).commit();
-                    }
-                    a.submitPage(
-                            () -> {
-                                try {
-                                    SourceEngine eng = a.engine(siteSnapshot);
-                                    List<Cms.Category> cats = currentCategories;
-                                    Cms.Listing list;
-                                    HomeScreen.Snapshot homeSnapshot = null;
-                                    if (catSnapshot.isEmpty() && pageSnapshot == 1) {
-                                        String raw =
-                                                cached != null
-                                                                && System.currentTimeMillis()
-                                                                                - cached.time
-                                                                        < 300000
-                                                        ? cached.filterSchema
-                                                        : eng.home();
-                                        cats = Cms.categories(raw);
-                                        list =
-                                                new JSONObject(raw).has("list")
-                                                        ? Cms.listing(raw, siteSnapshot)
-                                                        : new Cms.Listing();
-                                        if (list.videos.isEmpty()
-                                                && cached != null
-                                                && System.currentTimeMillis() - cached.time
-                                                        < 300000) {
-                                            list.videos.addAll(cached.videos);
-                                            list.pageCount = cached.pages;
-                                        }
-                                        if (list.videos.isEmpty()) {
-                                            try {
-                                                list = Cms.listing(eng.homeVideos(), siteSnapshot);
-                                            } catch (Throwable ignored) {
-                                            }
-                                        }
-                                        if (list.videos.isEmpty() && !cats.isEmpty()) {
-                                            list =
-                                                    Cms.listing(
-                                                            eng.category(cats.get(0).id, 1),
-                                                            siteSnapshot);
-                                        }
-                                        HomeScreen.Snapshot saved =
-                                                new HomeScreen.Snapshot(
-                                                        list.videos, cats, "", list.pageCount);
-                                        saved.filterSchema = raw;
-                                        homeSnapshot = saved;
-                                    } else {
-                                        if (cats.isEmpty()) {
-                                            if (cached != null
-                                                    && cached.categories != null
-                                                    && !cached.categories.isEmpty()) {
-                                                cats = new ArrayList<>(cached.categories);
-                                            } else {
-                                                try {
-                                                    String rawHome = eng.home();
-                                                    cats = Cms.categories(rawHome);
-                                                    if (filterSchema == null
-                                                            || filterSchema.isEmpty()
-                                                            || "{}".equals(filterSchema)) {
-                                                        filterSchema = rawHome;
-                                                    }
-                                                } catch (Throwable ignored) {
-                                                }
-                                            }
-                                        }
-                                        String targetCat =
-                                                catSnapshot.isEmpty() && !cats.isEmpty()
-                                                        ? cats.get(0).id
-                                                        : catSnapshot;
-                                        list =
-                                                Cms.listing(
-                                                        eng.category(
-                                                                targetCat,
-                                                                pageSnapshot,
-                                                                VideoFilters.remoteValues(
-                                                                        definitions,
-                                                                        filterSnapshot)),
-                                                        siteSnapshot);
-                                    }
-                                    final HomeScreen.Snapshot finalHomeSnapshot = homeSnapshot;
-                                    final List<Cms.Category> finalCats = cats;
-                                    final Cms.Listing finalList = list;
-                                    final List<Cms.Video> filtered =
-                                            VideoFilters.apply(
-                                                    list.videos, definitions, filterSnapshot);
-                                    a.learnTitles(finalList.videos);
-                                    a.ui.post(
-                                            () -> {
-                                                a.prefs
-                                                        .edit()
-                                                        .putString(Prefs.LOADING_SITE, "")
-                                                        .apply();
-                                                if (ticket != a.generation
-                                                        || a.isFinishing()
-                                                        || request != homeRequest) return;
-                                                loadingPage[0] = false;
-                                                pageFailed[0] = false;
-                                                completedPage[0] = pageSnapshot;
-                                                homeReady = true;
-                                                pullRefreshBadge.setVisibility(View.GONE);
-                                                if (finalHomeSnapshot != null) {
-                                                    filterSchema = finalHomeSnapshot.filterSchema;
-                                                    a.homeData.put(
-                                                            siteSnapshot.key, finalHomeSnapshot);
-                                                }
-                                                currentCategories = finalCats;
-                                                if (pageSnapshot == 1) {
-                                                    renderCategoryChips.run();
-                                                }
-                                                boolean configOrNetdisk =
-                                                        SourceController.isConfigOrNetdiskSite(
-                                                                siteSnapshot);
-                                                if (pageSnapshot == 1) currentVideos.clear();
-                                                for (Cms.Video v : filtered) {
-                                                    if (configOrNetdisk
-                                                            || v.action == null
-                                                            || v.action.isEmpty()) {
-                                                        currentVideos.add(v);
-                                                    }
-                                                }
-                                                totalPages = Math.max(1, finalList.pageCount);
-                                                statusText.setVisibility(
-                                                        currentVideos.isEmpty()
-                                                                ? View.VISIBLE
-                                                                : View.GONE);
-                                                if (currentVideos.isEmpty()) {
-                                                    statusText.setText(
-                                                            selectedFilters.isEmpty()
-                                                                    ? "当前分类暂无影片"
-                                                                    : "当前筛选暂无匹配，可继续加载更多影片");
-                                                }
-                                                // 首页顶部固定位已由「豆瓣热播」货架承担，
-                                                // 不再渲染「今日首推」大卡（避免重复占位）。
-                                                final int savedScrollY = scrollView.getScrollY();
-                                                renderVideoGrid(
-                                                        gridContainer, siteSnapshot, currentVideos);
-                                                if (pageSnapshot > 1 && savedScrollY > 0) {
-                                                    scrollView.scrollTo(0, savedScrollY);
-                                                    scrollView.post(
-                                                            () ->
-                                                                    scrollView.scrollTo(
-                                                                            0, savedScrollY));
-                                                }
-                                                if (currentPage < totalPages) {
-                                                    loadMoreBtn.setVisibility(View.VISIBLE);
-                                                    loadMoreBtn.setText(
-                                                            "加载更多影片 ("
-                                                                    + currentPage
-                                                                    + "/"
-                                                                    + totalPages
-                                                                    + ")");
-                                                } else {
-                                                    loadMoreBtn.setVisibility(View.GONE);
-                                                }
-                                            });
-                                } catch (Throwable e) {
-                                    AppLog.w("MobileShell", "fetchCategoryPage failed", e);
-                                    a.ui.post(
-                                            () -> {
-                                                if (ticket != a.generation
-                                                        || a.isFinishing()
-                                                        || request != homeRequest) return;
-                                                a.prefs
-                                                        .edit()
-                                                        .putString(Prefs.LOADING_SITE, "")
-                                                        .apply();
-                                                if (ticket != a.generation
-                                                        || a.isFinishing()
-                                                        || request != homeRequest) return;
-                                                loadingPage[0] = false;
-                                                pageFailed[0] = true;
-                                                homeReady = !currentVideos.isEmpty();
-                                                pullRefreshBadge.setVisibility(View.GONE);
-                                                statusText.setVisibility(View.VISIBLE);
-                                                statusText.setText("加载失败：" + a.message(e));
-                                                loadMoreBtn.setVisibility(View.VISIBLE);
-                                                loadMoreBtn.setText("点击重试");
-                                            });
-                                }
-                            });
-                };
-
-        loadMoreBtn.setOnClickListener(
-                v -> {
-                    if (loadingPage[0]) return;
-                    if (!pageFailed[0] && currentPage < totalPages) currentPage++;
-                    fetchCategoryPage[0].run();
-                });
-
-        // Auto-load next page when scrolling near bottom (matching iPhone infinite scroll)
-        scrollView
-                .getViewTreeObserver()
-                .addOnScrollChangedListener(
-                        () -> {
-                            if (loadingPage[0] || pageFailed[0] || currentPage >= totalPages)
-                                return;
-                            View child = scrollView.getChildAt(0);
-                            if (child == null) return;
-                            int diff =
-                                    child.getBottom()
-                                            - (scrollView.getHeight() + scrollView.getScrollY());
-                            if (diff <= a.dp(240)) {
-                                currentPage++;
-                                fetchCategoryPage[0].run();
-                            }
-                        });
-
-        renderCategoryChips.run();
-        fetchCategoryPage[0].run();
+                                    // 取消可能仍在运行的 body 位移动画，避免 grid 更新与动画叠加造成闪烁。
+                                    body.animate().cancel();
+                                    body.setTranslationY(0f);
+                                    pullRefreshBadge.setVisibility(View.GONE);
+                                    pullRefreshBadge.setAlpha(1f);
+                                });
+        // 旧 CMS 网格删除后这里曾经永远为 false，导致每次返回主页都整页重建、海报闪烁。
+        homeReady = true;
     }
 
     private List<VideoFilters.Definition> mobileFilterDefinitions() {
@@ -2294,26 +2075,34 @@ final class MobileShell {
                 });
 
         renderHistoryChips.run();
+        // 把「应用 pending 关键字」封装成 applier：renderSearchTab 首次创建时立即执行一次；
+        // 之后再次点击首页封面进入搜索（页签已存在）时，switchTab(1) 调用同一逻辑，
+        // 保证新关键字被填充并触发搜索（相同关键字则恢复缓存结果，避免重复搜索）。
+        pendingKeywordApplier =
+                () -> {
+                    if (pendingSearchKeyword.isEmpty()) return;
+                    String wantedKw = pendingSearchKeyword;
+                    pendingSearchKeyword = "";
+                    input.setText(wantedKw);
+                    input.setSelection(wantedKw.length());
+                    if (wantedKw.equals(cachedSearchKeyword) && !cachedSearchHits.isEmpty()) {
+                        final int savedScroll = cachedSearchScrollY;
+                        final int savedFilterX = cachedSiteFilterScrollX;
+                        if (cachedSearchStatus.isEmpty())
+                            cachedSearchStatus = "已保留搜索结果，共 " + cachedSearchHits.size() + " 条";
+                        rebuildFilteredResults.run();
+                        if (savedFilterX > 0) {
+                            siteFilterScroll.post(() -> siteFilterScroll.scrollTo(savedFilterX, 0));
+                        }
+                        if (savedScroll > 0) {
+                            resultScroll.post(() -> resultScroll.scrollTo(0, savedScroll));
+                        }
+                    } else {
+                        triggerSearch[0].run();
+                    }
+                };
         if (!pendingSearchKeyword.isEmpty()) {
-            String wantedKw = pendingSearchKeyword;
-            pendingSearchKeyword = "";
-            input.setText(wantedKw);
-            input.setSelection(wantedKw.length());
-            if (wantedKw.equals(cachedSearchKeyword) && !cachedSearchHits.isEmpty()) {
-                final int savedScroll = cachedSearchScrollY;
-                final int savedFilterX = cachedSiteFilterScrollX;
-                if (cachedSearchStatus.isEmpty())
-                    cachedSearchStatus = "已保留搜索结果，共 " + cachedSearchHits.size() + " 条";
-                rebuildFilteredResults.run();
-                if (savedFilterX > 0) {
-                    siteFilterScroll.post(() -> siteFilterScroll.scrollTo(savedFilterX, 0));
-                }
-                if (savedScroll > 0) {
-                    resultScroll.post(() -> resultScroll.scrollTo(0, savedScroll));
-                }
-            } else {
-                triggerSearch[0].run();
-            }
+            pendingKeywordApplier.run();
         } else if (!cachedSearchKeyword.isEmpty()) {
             input.setText(cachedSearchKeyword);
             input.setSelection(cachedSearchKeyword.length());
@@ -3450,6 +3239,19 @@ final class MobileShell {
                                         new MainActivity.Screen(
                                                 () -> new SettingsScreen(a).adSkip()),
                                         true));
+                // 视频牛皮癣模糊：与 TV 版 SettingsScreen 共用同一页面；手机上为文字行开关样式。
+                addSettingCard(
+                        body,
+                        6,
+                        "视频牛皮癣模糊",
+                        AdBlurConfig.isEnabled()
+                                ? ("开启 · " + AdBlurTemplates.count(a) + " 个特征图")
+                                : "已关闭",
+                        () ->
+                                a.open(
+                                        new MainActivity.Screen(
+                                                () -> new SettingsScreen(a).adBlur()),
+                                        true));
                 addSettingCard(
                         body,
                         6,
@@ -3497,7 +3299,7 @@ final class MobileShell {
                 body,
                 6,
                 "智能跳过与内容过滤",
-                "口播广告自动跳过 · NSFW 内容过滤",
+                "口播广告自动跳过 · 牛皮癣广告模糊 · NSFW 内容过滤",
                 () -> {
                     settingsSubPage = 6;
                     sv.scrollTo(0, 0);

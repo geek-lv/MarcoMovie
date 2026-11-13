@@ -133,6 +133,58 @@ public final class SearchCoordinator implements AutoCloseable {
         return count != null && count.get() > 0;
     }
 
+    /**
+     * 过滤「静态噪音」片源批次：部分资源站（实测「建安资源」）的搜索接口完全忽略 wd 参数，
+     * 无论搜什么都返回同一批默认列表（20 条、total=6 万+，标题与关键字零相关）。
+     *
+     * <p>正常 MacCMS 站点对中文关键字返回的标题全部包含关键字（演员名返回空，已实测验证），
+     * 因此对含 CJK 的关键字做标题相关性校验：一条都不沾边 → 整批视为噪音丢弃（Outcome.EMPTY）；
+     * 部分相关 → 只保留相关条目。匹配时容忍「第二季」后缀与标点分隔的主副标题
+     * （如「黑鸽 第二季」→「黑鸽」、「相遇骤雨中：温柔的细雨」→「相遇骤雨中」）。
+     * 拼音/字母关键字无法用标题包含性验证，跳过过滤。
+     */
+    static List<Cms.Video> filterNoise(String query, List<Cms.Video> videos) {
+        if (query == null || videos == null || videos.isEmpty()) return videos;
+        String q = normalizeForMatch(query);
+        if (q.isEmpty() || !hasCjk(q)) return videos;
+        String core = stripSeasonSuffix(q);
+        String head = firstSegment(q);
+        List<Cms.Video> out = new ArrayList<>();
+        for (Cms.Video v : videos) {
+            if (v == null) continue;
+            String t = normalizeForMatch(v.title);
+            if (t.isEmpty()) continue;
+            if (t.contains(q)
+                    || (core.length() >= 2 && t.contains(core))
+                    || (head.length() >= 2 && t.contains(head))) {
+                out.add(v);
+            }
+        }
+        return out;
+    }
+
+    private static String normalizeForMatch(String s) {
+        if (s == null) return "";
+        return s.toLowerCase(Locale.ROOT).replaceAll("[\\s　]+", "");
+    }
+
+    private static boolean hasCjk(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= 0x4E00 && c <= 0x9FFF) return true;
+        }
+        return false;
+    }
+
+    private static String stripSeasonSuffix(String s) {
+        return s.replaceFirst("(第[0-9一二三四五六七八九十百]+[季部]|[Ss]eason[0-9]+)$", "");
+    }
+
+    private static String firstSegment(String s) {
+        String[] parts = s.split("[：:·，,。．.!！?？（(）)【】\\[\\]「」『』《》]");
+        return parts.length > 0 ? parts[0] : s;
+    }
+
     public synchronized void start(List<Cms.Site> sites, String query) {
         if (closed || !jobs.isEmpty()) throw new IllegalStateException("Search already started");
         for (Cms.Site site : sites) jobs.add(new Job(site, query));
@@ -224,7 +276,8 @@ public final class SearchCoordinator implements AutoCloseable {
                             videos.add(v);
                             if (videos.size() == 24) break;
                         }
-                finish(videos, videos.isEmpty() ? Outcome.EMPTY : Outcome.RESULT);
+                List<Cms.Video> relevant = filterNoise(query, videos);
+                finish(relevant, relevant.isEmpty() ? Outcome.EMPTY : Outcome.RESULT);
             } catch (Exception error) {
                 finish(
                         Collections.emptyList(),

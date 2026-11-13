@@ -84,21 +84,21 @@ final class DoubanHot {
         new Major(
                 "剧集",
                 new Category[] {
+                    new Category("国产剧", "tv", "国产剧"),
                     new Category("热门剧集", "tv", "热门"),
                     new Category("美剧", "tv", "美剧"),
                     new Category("日剧", "tv", "日剧"),
                     new Category("韩剧", "tv", "韩剧"),
-                    new Category("国产剧", "tv", "国产剧"),
                     new Category("英剧", "tv", "英剧"),
                     new Category("纪录剧集", "tv", "纪录片"),
                 }),
         new Major(
                 "电影",
                 new Category[] {
+                    new Category("豆瓣高分", "movie", "豆瓣高分"),
                     new Category("热门电影", "movie", "热门"),
                     new Category("最新电影", "movie", "最新"),
                     new Category("经典电影", "movie", "经典"),
-                    new Category("豆瓣高分", "movie", "豆瓣高分"),
                     new Category("冷门佳片", "movie", "冷门佳片"),
                     new Category("华语电影", "movie", "华语"),
                     new Category("欧美电影", "movie", "欧美"),
@@ -124,13 +124,23 @@ final class DoubanHot {
     /** 豆瓣接口单页上限 20 条，瀑布流翻页步长与此一致 */
     private static final int PAGE = 20;
 
-    /** 榜单缓存：榜单变化慢，10 分钟足够，避免每次回首页都打豆瓣（按 type/tag 分键） */
-    private static final long TTL_MS = 10 * 60 * 1000L;
+    /** 每个榜单首批 20 条按自然日缓存；当天首次启动按顺序预取全部榜单。 */
+    private static final String PRELOAD_DAY_PREF = "douban.preload.day";
+
+    private static final String CACHE_PREF_PREFIX = "douban.daily.";
 
     private static final Map<String, Cached> CACHE = new LinkedHashMap<>();
+    private static final Map<String, List<FirstPageCallback>> FIRST_PAGE_WAITERS =
+            new LinkedHashMap<>();
+    private static boolean preloading;
+    private static String preloadDay = "";
+
+    private interface FirstPageCallback {
+        void accept(List<Item> items, String error);
+    }
 
     private static final class Cached {
-        long time;
+        String day;
         List<Item> items;
     }
 
@@ -184,6 +194,14 @@ final class DoubanHot {
     private int drawn;
     private boolean gridFailed, moreBusy;
 
+    /** 当前网格对应的榜单及已画内容签名；相同内容不再清空重建。 */
+    private String gridKey = "";
+
+    private final List<String> drawnSignatures = new ArrayList<>();
+
+    /** item id -> 已显示卡片；刷新时复用原 View，避免海报闪空和重复请求。 */
+    private final Map<String, View> gridCards = new LinkedHashMap<>();
+
     private DoubanHot(
             MainActivity activity,
             Category[] categories,
@@ -208,6 +226,51 @@ final class DoubanHot {
 
     private boolean grid() {
         return gridBox != null;
+    }
+
+    private static String today() {
+        return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                .format(new java.util.Date());
+    }
+
+    /** 当天只启动一次全榜单预取；当前大类排第一，首屏不被其余榜单阻塞。 */
+    private void preloadDaily() {
+        final String day = today();
+        synchronized (DoubanHot.class) {
+            if (preloading && day.equals(preloadDay)) return;
+            if (day.equals(a.prefs.getString(PRELOAD_DAY_PREF, ""))) return;
+            preloading = true;
+            preloadDay = day;
+        }
+        List<Category> ordered = new ArrayList<>();
+        Category first = majors[major].subs[lastSub[major]];
+        ordered.add(first);
+        for (Major group : majors)
+            for (Category cat : group.subs) if (!cat.key().equals(first.key())) ordered.add(cat);
+        preloadNext(ordered, 0, day);
+    }
+
+    private void preloadNext(List<Category> ordered, int index, String day) {
+        if (!day.equals(today())) {
+            synchronized (DoubanHot.class) {
+                preloading = false;
+            }
+            return;
+        }
+        int next = index;
+        while (next < ordered.size() && cacheGet(ordered.get(next).key()) != null) next++;
+        if (next >= ordered.size()) {
+            a.prefs.edit().putString(PRELOAD_DAY_PREF, day).apply();
+            synchronized (DoubanHot.class) {
+                preloading = false;
+            }
+            return;
+        }
+        final int current = next;
+        fetchFirstPage(
+                ordered.get(current),
+                false,
+                (items, error) -> preloadNext(ordered, current + 1, day));
     }
 
     private Category category() {
@@ -280,14 +343,24 @@ final class DoubanHot {
      */
     static DoubanHot attachGrid(
             MainActivity a, LinearLayout parent, int columns, int posterWidthDp) {
+        return attachGrid(a, parent, columns, posterWidthDp, true, 0);
+    }
+
+    /**
+     * @param showMajorRow TV 保留大类行；手机把大类入口放到顶栏时传 false，片单区只显示细分行
+     * @param initialMajor 恢复上次选择的大类，避免页面重建后总跳回剧集
+     */
+    static DoubanHot attachGrid(
+            MainActivity a,
+            LinearLayout parent,
+            int columns,
+            int posterWidthDp,
+            boolean showMajorRow,
+            int initialMajor) {
         LinearLayout section = a.vertical();
 
-        LinearLayout header = a.row();
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(a.dp(16), a.dp(16), a.dp(16), a.dp(0));
-        TextView title = a.text("豆瓣片单", 22, MainActivity.WHITE);
-        title.setTypeface(null, Typeface.BOLD);
-        header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
+        // 首页不显示「豆瓣片单」标题：顶栏已有「剧集 ▾」大类入口，标题冗余；
+        // 直接以分类 chips 开头，视觉更干净（行内自带顶部留白）。
 
         LinearLayout box = a.vertical();
         box.setClipChildren(false);
@@ -298,20 +371,42 @@ final class DoubanHot {
 
         final DoubanHot waterfall =
                 new DoubanHot(a, null, GRID_MAJORS, null, null, box, hint, columns, posterWidthDp);
+        MainActivity.flicker(
+                "GRID_ATTACH grid="
+                        + System.identityHashCode(waterfall)
+                        + " box="
+                        + System.identityHashCode(box)
+                        + " major="
+                        + initialMajor);
+        box.addOnAttachStateChangeListener(
+                new View.OnAttachStateChangeListener() {
+                    @Override
+                    public void onViewAttachedToWindow(View v) {
+                        MainActivity.flicker("GRID_BOX_ATTACH box=" + System.identityHashCode(v));
+                    }
 
-        // 第一级：大类条（剧集 / 电影 / 综艺）
-        HorizontalScrollView majorScroll = new HorizontalScrollView(a);
-        majorScroll.setHorizontalScrollBarEnabled(false);
-        majorScroll.setClipToPadding(false);
-        majorScroll.setClipChildren(false);
-        majorScroll.setPadding(a.dp(16), a.dp(4), a.dp(16), a.dp(6));
-        LinearLayout majorRow = a.row();
-        majorScroll.addView(majorRow);
-        for (int i = 0; i < waterfall.majors.length; i++) {
-            TextView chip = waterfall.makeMajorChip(i);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
-            if (i > 0) lp.leftMargin = a.dp(12);
-            majorRow.addView(chip, lp);
+                    @Override
+                    public void onViewDetachedFromWindow(View v) {
+                        MainActivity.flicker("GRID_BOX_DETACH box=" + System.identityHashCode(v));
+                    }
+                });
+
+        // TV：第一级大类条；手机：大类入口在右上角，这里不再重复显示第一级。
+        HorizontalScrollView majorScroll = null;
+        if (showMajorRow) {
+            majorScroll = new HorizontalScrollView(a);
+            majorScroll.setHorizontalScrollBarEnabled(false);
+            majorScroll.setClipToPadding(false);
+            majorScroll.setClipChildren(false);
+            majorScroll.setPadding(a.dp(16), a.dp(14), a.dp(16), a.dp(2));
+            LinearLayout majorRow = a.row();
+            majorScroll.addView(majorRow);
+            for (int i = 0; i < waterfall.majors.length; i++) {
+                TextView chip = waterfall.makeMajorChip(i);
+                LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+                if (i > 0) lp.leftMargin = a.dp(12);
+                majorRow.addView(chip, lp);
+            }
         }
 
         // 第二级：当前大类的细分榜单条（切大类时整体重建）
@@ -319,7 +414,7 @@ final class DoubanHot {
         subScroll.setHorizontalScrollBarEnabled(false);
         subScroll.setClipToPadding(false);
         subScroll.setClipChildren(false);
-        subScroll.setPadding(a.dp(16), a.dp(0), a.dp(16), a.dp(4));
+        subScroll.setPadding(a.dp(16), a.dp(14), a.dp(16), a.dp(10));
         LinearLayout subRowBox = a.row();
         subScroll.addView(subRowBox);
         waterfall.subRow = subRowBox;
@@ -363,15 +458,17 @@ final class DoubanHot {
         moreWrap.setPadding(0, a.dp(12), 0, a.dp(8));
         moreWrap.addView(more, new LinearLayout.LayoutParams(-2, -2));
 
-        section.addView(header, new LinearLayout.LayoutParams(-1, -2));
-        section.addView(majorScroll, new LinearLayout.LayoutParams(-1, -2));
+        if (majorScroll != null)
+            section.addView(majorScroll, new LinearLayout.LayoutParams(-1, -2));
         section.addView(subScroll, new LinearLayout.LayoutParams(-1, -2));
         section.addView(box, new LinearLayout.LayoutParams(-1, -2));
         section.addView(moreWrap, new LinearLayout.LayoutParams(-1, -2));
         section.addView(hint, new LinearLayout.LayoutParams(-1, -2));
         parent.addView(section, new LinearLayout.LayoutParams(-1, -2));
 
-        waterfall.selectMajor(0);
+        waterfall.major = Math.max(0, Math.min(initialMajor, GRID_MAJORS.length - 1));
+        waterfall.preloadDaily();
+        waterfall.selectMajor(waterfall.major);
         return waterfall;
     }
 
@@ -385,14 +482,14 @@ final class DoubanHot {
         chip.setTag("douban-tab:" + index);
         focusableTouch(chip);
         chip.setOnClickListener(v -> select(index));
-        chip.setOnFocusChangeListener((v, f) -> styleChip(chip, index == tab));
+        chip.setOnFocusChangeListener((v, f) -> styleChip(chip, index == tab, false));
         chips.add(chip);
         return chip;
     }
 
     /** TV 瀑布流的一级大类 chip。 */
     private TextView makeMajorChip(final int index) {
-        TextView chip = a.text(majors[index].label, 14f, MainActivity.MUTED);
+        TextView chip = a.text(majors[index].label, 16f, MainActivity.MUTED);
         chip.setGravity(Gravity.CENTER);
         chip.setPadding(a.dp(16), a.dp(7), a.dp(16), a.dp(7));
         chip.setTag("douban-major:" + index);
@@ -400,7 +497,7 @@ final class DoubanHot {
         chip.setOnClickListener(v -> selectMajor(index));
         chip.setOnFocusChangeListener(
                 (v, f) -> {
-                    styleChip(chip, index == major);
+                    styleChip(chip, index == major, true);
                     if (f) scrollChipIntoView(chip);
                 });
         majorChips.add(chip);
@@ -417,7 +514,7 @@ final class DoubanHot {
         chip.setOnClickListener(v -> selectSub(index));
         chip.setOnFocusChangeListener(
                 (v, f) -> {
-                    styleChip(chip, index == sub);
+                    styleChip(chip, index == sub, false);
                     if (f) scrollChipIntoView(chip);
                 });
         subChips.add(chip);
@@ -430,8 +527,24 @@ final class DoubanHot {
                 new Rect(-a.dp(24), 0, chip.getWidth() + a.dp(24), chip.getHeight()), false);
     }
 
+    static String[] majorLabels() {
+        String[] labels = new String[GRID_MAJORS.length];
+        for (int i = 0; i < GRID_MAJORS.length; i++) labels[i] = GRID_MAJORS[i].label;
+        return labels;
+    }
+
     /** 切大类：重建二级细分条，并回到该大类上次选中的细分。 */
-    private void selectMajor(int index) {
+    void selectMajor(int index) {
+        if (majors == null || index < 0 || index >= majors.length) return;
+        // 顶栏重复点当前大类不应清空网格、重新请求。
+        if (major == index && subRow != null && subRow.getChildCount() > 0) return;
+        MainActivity.flicker(
+                "GRID_MAJOR from="
+                        + major
+                        + " to="
+                        + index
+                        + " grid="
+                        + System.identityHashCode(this));
         major = index;
         token++;
         styleMajors();
@@ -441,9 +554,18 @@ final class DoubanHot {
 
     /** 切二级细分榜单。 */
     private void selectSub(int index) {
+        String nextKey = majors[major].subs[index].key();
+        if (sub == index && nextKey.equals(gridKey) && (!gridRows.isEmpty() || moreBusy)) return;
         sub = index;
         lastSub[major] = index;
         token++;
+        MainActivity.flicker(
+                "GRID_SUB key="
+                        + nextKey
+                        + " token="
+                        + token
+                        + " grid="
+                        + System.identityHashCode(this));
         styleSubs();
         startGridTab();
     }
@@ -462,11 +584,11 @@ final class DoubanHot {
     }
 
     private void styleMajors() {
-        for (int i = 0; i < majorChips.size(); i++) styleChip(majorChips.get(i), i == major);
+        for (int i = 0; i < majorChips.size(); i++) styleChip(majorChips.get(i), i == major, true);
     }
 
     private void styleSubs() {
-        for (int i = 0; i < subChips.size(); i++) styleChip(subChips.get(i), i == sub);
+        for (int i = 0; i < subChips.size(); i++) styleChip(subChips.get(i), i == sub, false);
     }
 
     private void select(int index) {
@@ -481,7 +603,7 @@ final class DoubanHot {
     private void select(int index, int attempt) {
         tab = index;
         token++;
-        for (int i = 0; i < chips.size(); i++) styleChip(chips.get(i), i == tab);
+        for (int i = 0; i < chips.size(); i++) styleChip(chips.get(i), i == tab, false);
         Category cat = categories[index];
         List<Item> cached = cacheGet(cat.key());
         if (cached != null) {
@@ -555,23 +677,82 @@ final class DoubanHot {
             }
         }
         if (items != null && !items.isEmpty()) {
+            MainActivity.flicker(
+                    "GRID_CACHE_DRAW key="
+                            + key
+                            + " count="
+                            + items.size()
+                            + " box="
+                            + System.identityHashCode(gridBox));
             drawGrid(items, 0);
             return;
         }
+        MainActivity.flickerStack(
+                "GRID_EMPTY_CLEAR key=" + key + " box=" + System.identityHashCode(gridBox));
         gridRows.clear();
         gridBox.removeAllViews();
+        gridKey = key;
+        drawnSignatures.clear();
+        gridCards.clear();
         drawn = 0;
         gridHint.setText("正在获取" + cat.label + "榜单…");
+        gridHint.setVisibility(View.VISIBLE);
         if (gridMore != null && !gridMore.hasFocus()) gridMore.setVisibility(View.GONE);
         fetchGrid(cat, 0, 0);
+    }
+
+    /** 返回保留的首页时恢复被 cancelPageRequests 打断的加载，不重建整个片单。 */
+    void resume() {
+        if (!grid()) return;
+        token++;
+        moreBusy = false;
+        Category cat = category();
+        List<Item> items = loaded.get(cat.key());
+        if (items == null || items.isEmpty()) {
+            gridFailed = false;
+            fetchGrid(cat, 0, 0);
+        } else if (gridRows.isEmpty()) {
+            drawGrid(items, 0);
+        } else {
+            // 空闲态不显示任何底部说明文字（仅在加载/出错/刷新反馈时出现）
+            gridHint.setText("");
+            gridHint.setVisibility(View.GONE);
+            if (gridMore != null && !Boolean.TRUE.equals(exhausted.get(cat.key()))) {
+                gridMore.setText("加载更多");
+                gridMore.setVisibility(View.VISIBLE);
+            }
+            wire();
+        }
+    }
+
+    /** 下拉刷新：旧片单保持可见，拿到新数据后才替换，避免先清空造成白屏闪烁。 */
+    void refresh(Runnable done) {
+        if (!grid() || moreBusy) {
+            if (done != null) done.run();
+            return;
+        }
+        Category cat = category();
+        MainActivity.flicker(
+                "GRID_REFRESH_START key="
+                        + cat.key()
+                        + " visible="
+                        + drawn
+                        + " generation="
+                        + a.generation);
+        cacheRemove(cat.key());
+        token++;
+        gridFailed = false;
+        // 不改变 hint 文字：hint 在 ScrollView 内，文字变化会引起内部布局抖动导致视觉闪烁。
+        // 下拉刷新期间顶部 badge 已显示「正在刷新…」，结果到达后在 drawGrid 中统一更新 hint。
+        fetchGrid(cat, 0, 0, true, done);
     }
 
     /** 网格模式：「加载更多」/「重新加载」。 */
     private void loadMore() {
         if (!grid() || moreBusy) return;
         if (gridFailed) {
-            // 第 0 页都没拉到过：按钮此刻是「重新加载」，重新走整页流程
-            selectSub(sub);
+            // 按钮此刻是「重新加载」，直接保留旧内容重试，避免先清空网格
+            refresh(null);
             return;
         }
         Category cat = category();
@@ -592,10 +773,79 @@ final class DoubanHot {
      * <p>pageStart==0 失败时沿用货架的自动重试策略（共 3 次尝试），全部失败把
      * 「加载更多」变成「重新加载」，避免给 TV 用户一个点了没反应的提示行。
      */
+    /** 第一页请求去重：每日预取和用户点分类可以同时等待同一次请求，不重复打豆瓣。 */
+    private void fetchFirstPage(Category cat, boolean bypassCache, FirstPageCallback callback) {
+        final String key = cat.key();
+        if (!bypassCache) {
+            List<Item> cached = cacheGet(key);
+            if (cached != null) {
+                a.ui.post(() -> callback.accept(cached, null));
+                return;
+            }
+        }
+        synchronized (FIRST_PAGE_WAITERS) {
+            List<FirstPageCallback> waiters = FIRST_PAGE_WAITERS.get(key);
+            if (waiters != null) {
+                waiters.add(callback);
+                return;
+            }
+            waiters = new ArrayList<>();
+            waiters.add(callback);
+            FIRST_PAGE_WAITERS.put(key, waiters);
+        }
+        // 不放进 pageRequests：切搜索页不应取消当天的公共预取，其他页面仍在等结果。
+        a.worker.execute(
+                () -> {
+                    List<Item> items = null;
+                    String error = null;
+                    try {
+                        items = fetch(cat.type, cat.tag, 0);
+                    } catch (Throwable t) {
+                        error = a.message(t);
+                        AppLog.w("DoubanHot", "daily first page failed: " + key, t);
+                    }
+                    if (items != null && !items.isEmpty()) cachePut(key, items);
+                    final List<Item> result = items;
+                    final String failure =
+                            error != null
+                                    ? error
+                                    : (items == null || items.isEmpty() ? "空片单" : null);
+                    final List<FirstPageCallback> callbacks;
+                    synchronized (FIRST_PAGE_WAITERS) {
+                        callbacks = FIRST_PAGE_WAITERS.remove(key);
+                    }
+                    a.ui.post(
+                            () -> {
+                                if (callbacks == null) return;
+                                for (FirstPageCallback waiter : callbacks)
+                                    waiter.accept(result, failure);
+                            });
+                });
+    }
+
     private void fetchGrid(final Category cat, final int pageStart, final int attempt) {
+        fetchGrid(cat, pageStart, attempt, false, null);
+    }
+
+    private void fetchGrid(
+            final Category cat,
+            final int pageStart,
+            final int attempt,
+            final boolean replace,
+            final Runnable done) {
         moreBusy = true;
         final String key = cat.key();
         final int mine = token;
+        if (pageStart == 0) {
+            fetchFirstPage(
+                    cat,
+                    replace,
+                    (result, failure) ->
+                            onGridPage(
+                                    cat, pageStart, attempt, replace, done, key, mine, result,
+                                    failure));
+            return;
+        }
         a.submitPage(
                 () -> {
                     List<Item> items = null;
@@ -609,72 +859,103 @@ final class DoubanHot {
                     final List<Item> result = items;
                     final String failure = error;
                     a.ui.post(
-                            () -> {
-                                if (mine != token) return;
-                                moreBusy = false;
-                                if (result == null || result.isEmpty()) {
-                                    if (pageStart != 0) {
-                                        // 翻页失败：已画的内容保留，只收起按钮
-                                        exhausted.put(key, true);
-                                        if (gridMore != null && !gridMore.hasFocus())
-                                            gridMore.setVisibility(View.GONE);
-                                        return;
-                                    }
-                                    if (attempt < 2) {
-                                        gridHint.setText("正在重试获取" + cat.label + "榜单…");
-                                        a.ui.postDelayed(
-                                                () -> {
-                                                    if (mine == token)
-                                                        fetchGrid(cat, 0, attempt + 1);
-                                                },
-                                                800);
-                                    } else {
-                                        gridFailed = true;
-                                        gridHint.setText(
-                                                "豆瓣榜单暂时取不到"
-                                                        + (failure == null
-                                                                ? ""
-                                                                : "（" + failure + "）"));
-                                        if (gridMore != null) {
-                                            gridMore.setText("重新加载");
-                                            gridMore.setVisibility(View.VISIBLE);
-                                        }
-                                    }
-                                    return;
-                                }
-                                if (pageStart == 0) cachePut(key, result);
-                                nextStart.put(key, pageStart + result.size());
-                                List<Item> all = loaded.get(key);
-                                if (all == null) {
-                                    all = new ArrayList<>();
-                                    loaded.put(key, all);
-                                }
-                                Set<String> ids = new HashSet<>();
-                                for (Item it : all) ids.add(it.id);
-                                for (Item it : result)
-                                    if (it.id != null && !it.id.isEmpty() && ids.add(it.id))
-                                        all.add(it);
-                                exhausted.put(key, result.size() < PAGE);
-                                drawGrid(all, pageStart);
-                            });
+                            () ->
+                                    onGridPage(
+                                            cat, pageStart, attempt, replace, done, key, mine,
+                                            result, failure));
                 });
+    }
+
+    private void onGridPage(
+            Category cat,
+            int pageStart,
+            int attempt,
+            boolean replace,
+            Runnable done,
+            String key,
+            int mine,
+            List<Item> result,
+            String failure) {
+        if (mine != token) {
+            if (done != null) done.run();
+            return;
+        }
+        moreBusy = false;
+        if (result == null || result.isEmpty()) {
+            if (pageStart != 0) {
+                // 翻页失败：已画的内容保留，只收起按钮
+                exhausted.put(key, true);
+                if (gridMore != null && !gridMore.hasFocus()) gridMore.setVisibility(View.GONE);
+                return;
+            }
+            if (attempt < 2) {
+                gridHint.setText("正在重试获取" + cat.label + "榜单…");
+                a.ui.postDelayed(
+                        () -> {
+                            if (mine == token) fetchGrid(cat, 0, attempt + 1, replace, done);
+                            else if (done != null) done.run();
+                        },
+                        800);
+            } else {
+                gridFailed = true;
+                gridHint.setText(
+                        (gridRows.isEmpty() ? "豆瓣榜单暂时取不到" : "刷新失败，继续显示当前片单")
+                                + (failure == null ? "" : "（" + failure + "）"));
+                gridHint.setVisibility(View.VISIBLE);
+                if (gridMore != null) {
+                    gridMore.setText("重新加载");
+                    gridMore.setVisibility(View.VISIBLE);
+                }
+                if (done != null) done.run();
+            }
+            return;
+        }
+        nextStart.put(key, pageStart + result.size());
+        List<Item> all = replace ? null : loaded.get(key);
+        if (all == null) {
+            all = new ArrayList<>();
+            loaded.put(key, all);
+        }
+        Set<String> ids = new HashSet<>();
+        for (Item it : all) ids.add(it.id);
+        for (Item it : result) if (it.id != null && !it.id.isEmpty() && ids.add(it.id)) all.add(it);
+        exhausted.put(key, result.size() < PAGE);
+        MainActivity.flicker(
+                "GRID_RESULT key="
+                        + key
+                        + " page="
+                        + pageStart
+                        + " new="
+                        + result.size()
+                        + " total="
+                        + all.size()
+                        + " replace="
+                        + replace
+                        + " token="
+                        + mine);
+        drawGrid(all, pageStart);
+        if (done != null) done.run();
     }
 
     // ---------------------------------------------------------------- 渲染
 
-    private void styleChip(TextView chip, boolean on) {
+    private void styleChip(TextView chip, boolean on, boolean major) {
         chip.setTypeface(null, on ? Typeface.BOLD : Typeface.NORMAL);
-        // 选中/未选中的底色与文字色不变；聚焦时由 FocusMotion 加白色描边 + 轻微放大，
-        // 兼顾真电视 DPad 的焦点反馈，手机触摸下永远不会触发聚焦，视觉与旧版一致。
+        // 一级大类选中=品牌蓝填充+白字（主导），二级细分选中=浅色填充+深字（从属），
+        // 未选中透明+灰字；聚焦时由 FocusMotion 加白色描边+轻微放大（手机触摸不触发）。
+        int bgOn = major ? 0xff0a84ff : 0xffe9efec;
+        int txtOn = major ? 0xffffffff : 0xff101413;
+        int bgOff = 0x00000000;
+        int txtOff = 0xffb9c4c0;
         FocusMotion.style(
                 a,
                 chip,
                 chip.hasFocus(),
-                on ? 0xffe9efec : 0x1fffffff,
-                on ? 0xffe9efec : 0x1fffffff,
+                on ? bgOn : bgOff,
+                on ? bgOn : bgOff,
                 999,
-                on ? 0xff101413 : 0xffb9c4c0,
-                on ? 0xff101413 : 0xffb9c4c0,
+                on ? txtOn : txtOff,
+                on ? txtOn : txtOff,
                 true,
                 1.03f);
     }
@@ -683,20 +964,153 @@ final class DoubanHot {
         rowBox.removeAllViews();
         int limit = Math.min(items.size(), 20);
         for (int i = 0; i < limit; i++) rowBox.addView(card(items.get(i), i, false));
-        hint.setText("数据来自豆瓣 · 点封面用片名在当前片源搜索");
+        // 空闲态不显示底部说明文字
+        hint.setText("");
+        hint.setVisibility(View.GONE);
     }
 
-    /** 网格模式：pageStart==0 全量重画，否则从已画条目数继续往下补。 */
+    /** 网格模式：同榜刷新复用卡片原位更新；新分类才清空，翻页只追加。 */
     private void drawGrid(List<Item> items, int pageStart) {
         gridFailed = false;
+        String key = category().key();
         if (pageStart == 0) {
+            if (key.equals(gridKey) && !gridRows.isEmpty()) {
+                if (sameVisibleItems(items)) {
+                    MainActivity.flicker("GRID_NO_CHANGE key=" + key + " count=" + items.size());
+                    gridHint.setText("片单已是最新");
+                    gridHint.setVisibility(View.VISIBLE);
+                } else {
+                    MainActivity.flicker(
+                            "GRID_RECONCILE key=" + key + " old=" + drawn + " new=" + items.size());
+                    reconcileGrid(items);
+                    gridHint.setText("片单已更新");
+                    gridHint.setVisibility(View.VISIBLE);
+                }
+                updateGridMore(items);
+                wire();
+                return;
+            }
+            MainActivity.flickerStack(
+                    "GRID_FULL_CLEAR key="
+                            + key
+                            + " oldKey="
+                            + gridKey
+                            + " drawn="
+                            + drawn
+                            + " box="
+                            + System.identityHashCode(gridBox));
             gridBox.removeAllViews();
             gridRows.clear();
+            drawnSignatures.clear();
+            gridCards.clear();
+            gridKey = key;
             drawn = 0;
         }
-        for (int i = drawn; i < items.size(); i++) addGridCard(items.get(i), i);
+        for (int i = drawn; i < items.size(); i++) {
+            addGridCard(items.get(i), i);
+            drawnSignatures.add(signature(items.get(i)));
+        }
         drawn = items.size();
-        gridHint.setText("数据来自豆瓣 · 点封面用片名在当前片源搜索");
+        // 空闲态隐藏底部说明行
+        gridHint.setText("");
+        gridHint.setVisibility(View.GONE);
+        updateGridMore(items);
+        wire();
+    }
+
+    /**
+     * 同榜刷新不销毁任何保留卡片。按豆瓣条目 id 复用 View；仅顺序变化时移动原 View，
+     * 标题、评分等文字原位更新，URL 未变的海报不会重新进入 ImageLoader。
+     */
+    private void reconcileGrid(List<Item> items) {
+        List<View> oldOrder = new ArrayList<>();
+        for (List<View> row : gridRows) oldOrder.addAll(row);
+
+        List<View> target = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i++) {
+            Item item = items.get(i);
+            View view = item.id == null ? null : gridCards.get(item.id);
+            if (view == null) view = card(item, i, true);
+            bindGridCard(view, item, i);
+            target.add(view);
+        }
+
+        // 只是评分/剧集信息变化时不触碰布局；顺序变化也只移动已有 View，不重建图片。
+        if (!oldOrder.equals(target)) {
+            View focused = a.getCurrentFocus();
+            for (int i = 0; i < gridBox.getChildCount(); i++)
+                ((LinearLayout) gridBox.getChildAt(i)).removeAllViews();
+            gridRows.clear();
+
+            int rowCount = (target.size() + columns - 1) / columns;
+            while (gridBox.getChildCount() > rowCount)
+                gridBox.removeViewAt(gridBox.getChildCount() - 1);
+            while (gridBox.getChildCount() < rowCount) {
+                LinearLayout row = a.row();
+                row.setGravity(Gravity.TOP);
+                row.setClipChildren(false);
+                row.setClipToPadding(false);
+                row.setPadding(0, a.dp(5), 0, a.dp(16));
+                gridBox.addView(row);
+            }
+            for (int i = 0; i < gridBox.getChildCount(); i++) gridRows.add(new ArrayList<>());
+            for (int i = 0; i < target.size(); i++) {
+                int rowIndex = i / columns;
+                int column = i % columns;
+                LinearLayout row = (LinearLayout) gridBox.getChildAt(rowIndex);
+                View view = target.get(i);
+                LinearLayout.LayoutParams cell = new LinearLayout.LayoutParams(0, -2, 1);
+                cell.rightMargin = a.dp(column == columns - 1 ? 0 : 14);
+                row.addView(view, cell);
+                gridRows.get(rowIndex).add(view);
+            }
+            if (focused != null && target.contains(focused)) focused.requestFocus();
+        }
+
+        gridCards.clear();
+        drawnSignatures.clear();
+        for (int i = 0; i < items.size(); i++) {
+            Item item = items.get(i);
+            if (item.id != null && !item.id.isEmpty()) gridCards.put(item.id, target.get(i));
+            drawnSignatures.add(signature(item));
+        }
+        drawn = items.size();
+    }
+
+    /** 单向数据绑定：Item 属性映射到已存在 View；不在绑定层创建或销毁整片列表。 */
+    private void bindGridCard(View view, Item item, int index) {
+        view.setTag("douban-card:" + index);
+        view.setContentDescription(
+                item.title + (TextUtils.isEmpty(item.rate) ? "，豆瓣榜单" : "，豆瓣评分" + item.rate));
+        view.setOnClickListener(v -> a.openSearch(item.title));
+
+        FrameLayout box = (FrameLayout) ((LinearLayout) view).getChildAt(0);
+        ImageView poster = (ImageView) box.getChildAt(0);
+        String address = TextUtils.isEmpty(item.poster) ? "" : coverAddress(item.poster);
+        if (!address.equals(poster.getTag())) {
+            if (address.isEmpty()) {
+                poster.setTag("");
+                poster.setImageDrawable(null);
+            } else {
+                // 保留旧图直到新图就绪；同一条目换封面时也不先闪成灰色占位。
+                a.poster(address, poster);
+            }
+        }
+
+        if (box.getChildCount() > 1 && box.getChildAt(1) instanceof TextView) {
+            TextView rate = (TextView) box.getChildAt(1);
+            if (!rate.getText().toString().equals(item.rate)) rate.setText(item.rate);
+            rate.setVisibility(TextUtils.isEmpty(item.rate) ? View.GONE : View.VISIBLE);
+        }
+        TextView name = (TextView) ((LinearLayout) view).getChildAt(1);
+        if (!name.getText().toString().equals(item.title)) name.setText(item.title);
+        TextView sub = (TextView) ((LinearLayout) view).getChildAt(2);
+        String subText = TextUtils.isEmpty(item.episodes) ? "" : item.episodes;
+        sub.setVisibility(TextUtils.isEmpty(item.episodes) ? View.INVISIBLE : View.VISIBLE);
+        if (!sub.getText().toString().equals(subText)) sub.setText(subText);
+    }
+
+    private void updateGridMore(List<Item> items) {
         boolean done = Boolean.TRUE.equals(exhausted.get(category().key()));
         if (gridMore != null) {
             gridMore.setText(done ? "没有更多了" : "加载更多");
@@ -706,7 +1120,25 @@ final class DoubanHot {
                 gridMore.setVisibility(View.VISIBLE);
             }
         }
-        wire();
+    }
+
+    private boolean sameVisibleItems(List<Item> items) {
+        if (drawnSignatures.size() != items.size()) return false;
+        for (int i = 0; i < items.size(); i++)
+            if (!drawnSignatures.get(i).equals(signature(items.get(i)))) return false;
+        return true;
+    }
+
+    private static String signature(Item item) {
+        return String.valueOf(item.id)
+                + '\u0001'
+                + item.title
+                + '\u0001'
+                + item.poster
+                + '\u0001'
+                + item.rate
+                + '\u0001'
+                + item.episodes;
     }
 
     private void addGridCard(Item item, int index) {
@@ -728,6 +1160,7 @@ final class DoubanHot {
         cell.rightMargin = a.dp(column == columns - 1 ? 0 : 14);
         row.addView(card, cell);
         gridRows.get(gridRows.size() - 1).add(card);
+        if (item.id != null && !item.id.isEmpty()) gridCards.put(item.id, card);
     }
 
     /**
@@ -758,17 +1191,17 @@ final class DoubanHot {
             a.poster(coverAddress(item.poster), poster);
         }
 
-        if (!TextUtils.isEmpty(item.rate)) {
-            TextView rate = a.text(item.rate, 10, 0xffffffff);
-            rate.setTypeface(null, Typeface.BOLD);
-            rate.setBackground(a.bg(0xb3000000, 7));
-            rate.setPadding(a.dp(5), a.dp(1), a.dp(5), a.dp(1));
-            FrameLayout.LayoutParams lp =
-                    new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
-            lp.topMargin = a.dp(5);
-            lp.rightMargin = a.dp(5);
-            box.addView(rate, lp);
-        }
+        // 评分视图始终存在，后续同榜刷新可以原位更新，不必因评分增删而重建卡片。
+        TextView rate = a.text(item.rate, 10, 0xffffffff);
+        rate.setTypeface(null, Typeface.BOLD);
+        rate.setBackground(a.bg(0xb3000000, 7));
+        rate.setPadding(a.dp(5), a.dp(1), a.dp(5), a.dp(1));
+        rate.setVisibility(TextUtils.isEmpty(item.rate) ? View.GONE : View.VISIBLE);
+        FrameLayout.LayoutParams rateLp =
+                new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.END);
+        rateLp.topMargin = a.dp(5);
+        rateLp.rightMargin = a.dp(5);
+        box.addView(rate, rateLp);
 
         if (grid) {
             card.addView(box, new LinearLayout.LayoutParams(-1, a.dp(posterWidth * 1.42f)));
@@ -787,11 +1220,13 @@ final class DoubanHot {
 
         TextView sub =
                 a.text(
-                        TextUtils.isEmpty(item.episodes) ? "豆瓣榜单" : item.episodes,
+                        TextUtils.isEmpty(item.episodes) ? "" : item.episodes,
                         10.5f,
                         MainActivity.MUTED);
         sub.setSingleLine(true);
         sub.setEllipsize(TextUtils.TruncateAt.END);
+        // 无更新信息（剧集数）时不再兜底显示「豆瓣榜单」小字：保留占位（INVISIBLE）维持卡片等高
+        sub.setVisibility(TextUtils.isEmpty(item.episodes) ? View.INVISIBLE : View.VISIBLE);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
         subLp.topMargin = a.dp(2);
         if (grid) sub.setPadding(a.dp(2), 0, a.dp(2), 0);
@@ -839,10 +1274,18 @@ final class DoubanHot {
             cardLp.rightMargin = a.dp(10);
             card.setLayoutParams(cardLp);
         }
+        if (grid)
+            MainActivity.flicker(
+                    "CARD_NEW index="
+                            + index
+                            + " id="
+                            + item.id
+                            + " view="
+                            + System.identityHashCode(card)
+                            + " generation="
+                            + a.generation);
         return card;
     }
-
-    // ---------------------------------------------------------------- DPad 焦点接线
 
     /**
      * TV 首页 DPad 焦点连线：大类条 ↔ 细分条 ↔ 网格 ↔ 「加载更多」。
@@ -910,11 +1353,16 @@ final class DoubanHot {
         }
     }
 
-    /** 告诉右侧停靠栏哪些视图是「行末焦点」，避免焦点飘进导航。 */
+    /**
+     * 告诉右侧停靠栏哪些视图是「行末焦点」，避免焦点飘进导航。
+     *
+     * <p>注意：分类 chips（大类/细分）在横向滚动条内，永远不链接到 Dock。此前对每个 chip
+     * 都调 {@code rightEdge}，把所有 chips 的 nextFocusRightId 改写成了 Dock 首项，导致
+     * 遥控器在分类条上按右直接跳出、无法横向移动。chips 的横向移动由 {@link #linkHorizontal}
+     * 的自钳制 + 焦点回调里的 {@link #scrollChipIntoView} 滚动露出处理。
+     */
     void dockRight(HomeDock dock) {
         if (dock == null || !grid()) return;
-        for (TextView chip : majorChips) dock.rightEdge(chip);
-        for (TextView chip : subChips) dock.rightEdge(chip);
         for (List<View> row : gridRows) if (!row.isEmpty()) dock.rightEdge(row.get(row.size() - 1));
         if (gridMore != null) dock.rightEdge(gridMore);
     }
@@ -995,20 +1443,90 @@ final class DoubanHot {
         return items;
     }
 
-    private static synchronized List<Item> cacheGet(String key) {
-        Cached c = CACHE.get(key);
-        if (c == null) return null;
-        if (System.currentTimeMillis() - c.time > TTL_MS) {
-            CACHE.remove(key);
+    private List<Item> cacheGet(String key) {
+        String day = today();
+        synchronized (DoubanHot.class) {
+            Cached c = CACHE.get(key);
+            if (c != null) {
+                if (day.equals(c.day)) return new ArrayList<>(c.items);
+                CACHE.remove(key);
+            }
+        }
+        String raw = a.prefs.getString(CACHE_PREF_PREFIX + key, "");
+        if (raw.isEmpty()) return null;
+        try {
+            JSONObject root = new JSONObject(raw);
+            if (!day.equals(root.optString("day"))) return null;
+            List<Item> items = readItems(root.optJSONArray("items"));
+            if (items.isEmpty()) return null;
+            Cached c = new Cached();
+            c.day = day;
+            c.items = items;
+            synchronized (DoubanHot.class) {
+                CACHE.put(key, c);
+            }
+            return new ArrayList<>(items);
+        } catch (Throwable t) {
+            AppLog.w("DoubanHot", "daily cache unreadable: " + key, t);
             return null;
         }
-        return c.items;
     }
 
-    private static synchronized void cachePut(String key, List<Item> items) {
+    private void cacheRemove(String key) {
+        synchronized (DoubanHot.class) {
+            CACHE.remove(key);
+        }
+        a.prefs.edit().remove(CACHE_PREF_PREFIX + key).apply();
+    }
+
+    private void cachePut(String key, List<Item> items) {
         Cached c = new Cached();
-        c.time = System.currentTimeMillis();
-        c.items = items;
-        CACHE.put(key, c);
+        c.day = today();
+        c.items = new ArrayList<>(items);
+        synchronized (DoubanHot.class) {
+            CACHE.put(key, c);
+        }
+        try {
+            JSONObject root = new JSONObject();
+            root.put("day", c.day);
+            root.put("items", writeItems(items));
+            a.prefs.edit().putString(CACHE_PREF_PREFIX + key, root.toString()).apply();
+        } catch (Throwable t) {
+            AppLog.w("DoubanHot", "daily cache write failed: " + key, t);
+        }
+    }
+
+    private static List<Item> readItems(JSONArray array) {
+        List<Item> items = new ArrayList<>();
+        if (array == null) return items;
+        for (int i = 0; i < array.length(); i++) {
+            JSONObject o = array.optJSONObject(i);
+            if (o == null) continue;
+            Item item = new Item();
+            item.id = o.optString("id", "");
+            item.title = o.optString("title", "");
+            item.poster = o.optString("poster", "");
+            item.rate = o.optString("rate", "");
+            item.episodes = o.optString("episodes", "");
+            if (!item.title.isEmpty()) items.add(item);
+        }
+        return items;
+    }
+
+    private static JSONArray writeItems(List<Item> items) {
+        JSONArray array = new JSONArray();
+        for (Item item : items) {
+            JSONObject o = new JSONObject();
+            try {
+                o.put("id", item.id);
+                o.put("title", item.title);
+                o.put("poster", item.poster);
+                o.put("rate", item.rate);
+                o.put("episodes", item.episodes);
+                array.put(o);
+            } catch (Throwable ignored) {
+            }
+        }
+        return array;
     }
 }

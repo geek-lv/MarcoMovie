@@ -120,6 +120,64 @@ final class VideoOutput extends FrameLayout
         return advancing && current != null;
     }
 
+    /** 内层 SurfaceView（保真输出模式）；兼容输出模式下为 null。 */
+    public SurfaceView surfaceView() {
+        return surfaceView;
+    }
+
+    /** 内层 TextureView（兼容输出模式）；保真输出模式下为 null。 */
+    public TextureView textureView() {
+        return texture;
+    }
+
+    /** 全分辨率抓帧回调（主线程）。bitmap 为显示朝向，可能为 null（抓取失败），调用方负责回收。 */
+    interface FullFrameCallback {
+        void onFrame(Bitmap bitmap);
+    }
+
+    /**
+     * 抓取当前显示帧（全分辨率）。应在暂停后调用：TextureView 直取合成位图，
+     * SurfaceView 走 PixelCopy 抓取当前屏幕内容——均不经过 GL 特效管线，
+     * 不受数据空间 / HDR 与管线初始化问题影响。主线程回调。
+     */
+    public void snapshotFullFrame(FullFrameCallback callback) {
+        if (current == null || !current.isValid() || getWidth() <= 0 || getHeight() <= 0) {
+            callback.onFrame(null);
+            return;
+        }
+        if (texture != null) {
+            Bitmap frame = null;
+            try {
+                frame = texture.getBitmap();
+            } catch (RuntimeException unavailable) {
+                frame = null;
+            }
+            callback.onFrame(frame);
+        } else if (Build.VERSION.SDK_INT >= 24 && surfaceView != null) {
+            final Bitmap frame =
+                    Bitmap.createBitmap(getWidth(), getHeight(), Bitmap.Config.ARGB_8888);
+            try {
+                PixelCopy.request(
+                        surfaceView,
+                        frame,
+                        result -> {
+                            if (result == PixelCopy.SUCCESS) {
+                                callback.onFrame(frame);
+                            } else {
+                                frame.recycle();
+                                callback.onFrame(null);
+                            }
+                        },
+                        new Handler(Looper.getMainLooper()));
+            } catch (RuntimeException unavailable) {
+                frame.recycle();
+                callback.onFrame(null);
+            }
+        } else {
+            callback.onFrame(null);
+        }
+    }
+
     /** All visible controls share one bounded readback per 100 ms. */
     public void prepareGlassFrame(Runnable ready) {
         long now = android.os.SystemClock.uptimeMillis();

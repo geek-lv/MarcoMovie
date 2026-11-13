@@ -788,6 +788,11 @@ final class SourceController {
             UpdateScreen.result(a);
             return;
         }
+        if (request == SettingsScreen.PICK_ADBLUR_IMPORT) {
+            // 多选图片走 ClipData（data.getData() 可能为空），须在通用单 URI 路由之前处理
+            if (result == Activity.RESULT_OK && data != null) SettingsScreen.importResult(a, data);
+            return;
+        }
         if (request >= 44 && request <= 46) {
             if (result == Activity.RESULT_OK && data != null && data.getData() != null)
                 SettingsScreen.result(a, request, data.getData());

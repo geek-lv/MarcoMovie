@@ -1,5 +1,6 @@
 package com.pilipala.marcomovie;
 
+import android.content.ClipData;
 import android.content.Intent;
 import android.graphics.*;
 import android.net.Uri;
@@ -270,11 +271,17 @@ final class SettingsScreen {
     // ------------------------------------------------------------ 视频牛皮癣模糊
 
     void adBlur() {
+        // 设置页是移动端该功能的唯一入口：此处必须先 init（TV 由播放器链路初始化）。
+        // 否则 prefs==null 时所有读写静默 no-op，表现为「开关点了没反应」。
+        AdBlurConfig.init(a);
         page(
                 "视频牛皮癣模糊",
-                "识别画面里的二维码 / 贴片水印，把那块区域实时模糊成毛玻璃：广告出现即模糊、消失即恢复清晰。"
-                        + "特征图由你播放时框选保存，仅本机离线 GPU 匹配，不联网。仅在 Media3 播放器下生效；"
-                        + "开启后会启用 GL 合成，HDR 透传可能降级。");
+                "识别画面里的二维码 / 贴片水印，把那块区域实时模糊：广告出现即模糊、消失即恢复清晰。"
+                        + "模糊样式可选「柔和高斯」（多轮小步长迭代、平滑无条纹）或「马赛克」；"
+                        + "边缘羽化向外扩，不会把广告四边露出来。"
+                        + "特征图在横屏播放器右侧菜单「采集」框选保存，或从相册导入 PNG；"
+                        + "仅本机离线 GPU 匹配，不联网。仅在 Media3 播放器下生效；"
+                        + "开启后播放会启用 GL 合成，个别 HDR 片源画质可能降级。");
         adBlurToggle(
                 "功能总开关",
                 AdBlurConfig.isEnabled(),
@@ -283,6 +290,15 @@ final class SettingsScreen {
                     a.refresh();
                 });
         if (AdBlurConfig.isEnabled()) {
+            adBlurInts(
+                    "模糊样式",
+                    new String[] {"柔和高斯 · 平滑", "马赛克 · 方块"},
+                    new int[] {AdBlurConfig.STYLE_GAUSSIAN, AdBlurConfig.STYLE_MOSAIC},
+                    AdBlurConfig.getBlurStyle(),
+                    v -> {
+                        AdBlurConfig.setBlurStyle(v);
+                        a.refresh();
+                    });
             adBlurInts(
                     "模糊强度",
                     new String[] {"轻 · 10px", "标准 · 18px", "强 · 28px", "很强 · 40px"},
@@ -294,11 +310,26 @@ final class SettingsScreen {
                     });
             adBlurInts(
                     "检测频率",
-                    new String[] {"每 2 帧 · 灵敏", "每 6 帧 · 均衡", "每 12 帧 · 省电"},
-                    new int[] {2, 6, 12},
-                    AdBlurConfig.getDetectEveryN(),
+                    new String[] {"0.25s · 灵敏", "0.5s · 均衡", "1s · 省电"},
+                    new int[] {250, 500, 1000},
+                    AdBlurConfig.getDetectIntervalMs(),
                     v -> {
-                        AdBlurConfig.setDetectEveryN(v);
+                        AdBlurConfig.setDetectIntervalMs(v);
+                        a.refresh();
+                    });
+            adBlurInts(
+                    "识别置信度",
+                    new String[] {
+                        "严格 · 宁可不糊也不糊错", "标准 · 均衡", "宽松 · 灵敏但易误报"
+                    },
+                    new int[] {
+                        AdBlurConfig.CONF_STRICT,
+                        AdBlurConfig.CONF_BALANCED,
+                        AdBlurConfig.CONF_LOOSE
+                    },
+                    AdBlurConfig.getMinConfidence(),
+                    v -> {
+                        AdBlurConfig.setMinConfidence(v);
                         a.refresh();
                     });
             link(
@@ -307,7 +338,12 @@ final class SettingsScreen {
                     "adblur-templates",
                     () -> open(this::adBlurTemplates));
             if (!a.isTvDevice()) {
-                link("采集当前画面特征图", "在播放中框选广告区域，保存为模板", "adblur-capture", this::startCapture);
+                // 采集入口已统一移至横屏播放器右侧菜单「采集」（暂停抓显示帧，无 GL 管线依赖）
+                link(
+                        "从相册导入特征图",
+                        "选择已保存的广告区域 PNG 截图（可多选），导入后随扫码同步到电视",
+                        "adblur-import",
+                        this::startGalleryImport);
             }
         }
         if (a.isTvDevice()) {
@@ -325,7 +361,7 @@ final class SettingsScreen {
         }
         link(
                 "恢复默认设置",
-                "关闭开关 · 模糊 18px · 每 6 帧",
+                "关闭开关 · 柔和高斯 18px · 0.5s 检测 · 标准置信度",
                 "adblur-reset",
                 () ->
                         confirm(
@@ -358,10 +394,8 @@ final class SettingsScreen {
         caption.setPadding(0, a.dp(4), 0, 0);
         copy.addView(caption);
         row.addView(copy, new LinearLayout.LayoutParams(0, -2, 1));
-        final MobileShell.IosSwitchView sw = new MobileShell.IosSwitchView(a, initial);
-        LinearLayout.LayoutParams switchLp = new LinearLayout.LayoutParams(a.dp(50), a.dp(30));
-        switchLp.leftMargin = a.dp(12);
-        row.addView(sw, switchLp);
+        // TV 版：不用 IosSwitchView 小滑块（遥控器难以精确点击），整行文字行样式点击切换，
+        // 与 NSFW「内容过滤总开关」一致。caption 显示「开启/关闭」作为状态指示。
         row.setFocusable(tv);
         // 关键修复：TV 布局跑在触摸屏上时，focusableInTouchMode=true 会让「第一次触摸只抢焦点（触发缩放动画）、
         // 第二次才发 click」，表现为开关/行只缩放不响应。设 false 后触摸单击直接触发 onClick，
@@ -388,7 +422,6 @@ final class SettingsScreen {
         row.setOnClickListener(
                 v -> {
                     state[0] = !state[0];
-                    sw.setChecked(state[0], !a.reduced);
                     caption.setText(state[0] ? "开启" : "关闭");
                     onChange.accept(state[0]);
                 });
@@ -435,26 +468,11 @@ final class SettingsScreen {
                 });
     }
 
-    void startCapture() {
-        if (AdBlurTemplates.count(a) >= 8) {
-            a.toast("特征图已达上限（8 个），请先删除后再采集");
-            return;
-        }
-        AdBlurController.get(a)
-                .setCaptureListener(
-                        bmp -> {
-                            TemplateCaptureActivity.pending = bmp;
-                            a.startActivity(new Intent(a, TemplateCaptureActivity.class));
-                        });
-        AdBlurController.get(a).requestCapture();
-        a.toast("正在截取当前播放画面…（请保持视频正在播放）");
-    }
-
     void adBlurTemplates() {
         page("已保存特征图", "这些模板用于匹配画面里的牛皮癣。点击可删除；删除后该模板不再参与模糊。");
         java.util.List<String> names = AdBlurTemplates.list(a);
         if (names.isEmpty()) {
-            a.paragraph("暂无特征图。返回上级，点「采集当前画面特征图」来创建第一个模板。");
+            a.paragraph("暂无特征图。可在横屏播放器右侧菜单点「采集」框选截取，或在「视频牛皮癣模糊」页「从相册导入特征图」。");
             return;
         }
         for (final String name : names) {
@@ -473,14 +491,142 @@ final class SettingsScreen {
         }
     }
 
+    /** 相册导入特征图的请求码（SourceController.onActivityResult 路由到 {@link #importResult}）。 */
+    static final int PICK_ADBLUR_IMPORT = 47;
+
+    /** 单张特征图上限与采集流程一致（8 个），超出提示先删。 */
+    void startGalleryImport() {
+        if (AdBlurTemplates.count(a) >= 8) {
+            a.toast("特征图已达上限（8 个），请先删除后再导入");
+            return;
+        }
+        try {
+            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            intent.setType("image/png");
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+            a.startActivityForResult(intent, PICK_ADBLUR_IMPORT);
+        } catch (Exception error) {
+            a.notice("没有可用的文件选择器，无法从相册导入。");
+        }
+    }
+
+    /**
+     * 处理相册导入结果（可多选）。每张 PNG：解码降采样 → 竖直翻转成 GL 朝向 → 存为模板。
+     *
+     * <p>模板须与逐帧检测同坐标系（GL 朝向＝行 0 在画面底部）；相册图片是普通可视朝向，
+     * 与 {@code TemplateCaptureActivity} 的「显示→GL」保存前翻转保持一致。
+     */
+    static void importResult(MainActivity a, Intent data) {
+        java.util.List<Uri> uris = new java.util.ArrayList<>();
+        if (data.getClipData() != null) {
+            ClipData clip = data.getClipData();
+            for (int i = 0; i < clip.getItemCount(); i++) {
+                Uri u = clip.getItemAt(i).getUri();
+                if (u != null) uris.add(u);
+            }
+        } else if (data.getData() != null) {
+            uris.add(data.getData());
+        }
+        if (uris.isEmpty()) {
+            a.toast("未选择图片");
+            return;
+        }
+        final java.util.List<Uri> toImport = uris;
+        a.worker.execute(
+                () -> {
+                    int ok = 0, skipped = 0;
+                    for (Uri uri : toImport) {
+                        if (AdBlurTemplates.count(a) >= 8) {
+                            skipped++;
+                            continue;
+                        }
+                        Bitmap bmp = decodeForTemplate(a, uri);
+                        if (bmp == null) {
+                            skipped++;
+                            continue;
+                        }
+                        Bitmap gl = flipVertical(bmp);
+                        bmp.recycle();
+                        String saved = AdBlurTemplates.save(a, gl, displayName(a, uri));
+                        gl.recycle();
+                        if (saved != null) ok++;
+                        else skipped++;
+                    }
+                    final int fOk = ok, fSkip = skipped;
+                    a.ui.post(
+                            () -> {
+                                AdBlurController.get(a).notifyTemplatesChanged();
+                                a.refresh();
+                                a.toast(
+                                        "已导入 "
+                                                + fOk
+                                                + " 个特征图"
+                                                + (fSkip > 0 ? "，跳过 " + fSkip + " 个" : ""));
+                            });
+                });
+    }
+
+    /** 解码所选 PNG：按最长边 ≤256 降采样读取（save() 内部再降到 64px 模板尺寸）。 */
+    private static Bitmap decodeForTemplate(MainActivity a, Uri uri) {
+        try {
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            try (InputStream in = a.getContentResolver().openInputStream(uri)) {
+                BitmapFactory.decodeStream(in, null, bounds);
+            }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null;
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            int sample = 1;
+            int maxSide = Math.max(bounds.outWidth, bounds.outHeight);
+            while (maxSide / (sample * 2) >= 256) sample *= 2;
+            opts.inSampleSize = sample;
+            try (InputStream in = a.getContentResolver().openInputStream(uri)) {
+                return BitmapFactory.decodeStream(in, null, opts);
+            }
+        } catch (Exception error) {
+            return null;
+        }
+    }
+
+    /** 竖直翻转：相册图片（可视朝向）→ 模板存储的 GL 朝向（左右不变，上下镜像）。 */
+    private static Bitmap flipVertical(Bitmap src) {
+        android.graphics.Matrix m = new android.graphics.Matrix();
+        m.setScale(1f, -1f, src.getWidth() / 2f, src.getHeight() / 2f);
+        return Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), m, true);
+    }
+
+    private static String displayName(MainActivity a, Uri uri) {
+        try (android.database.Cursor cursor =
+                a.getContentResolver()
+                        .query(
+                                uri,
+                                new String[] {android.provider.OpenableColumns.DISPLAY_NAME},
+                                null,
+                                null,
+                                null)) {
+            if (cursor != null && cursor.moveToFirst()) {
+                String name = cursor.getString(0);
+                if (name != null) {
+                    int dot = name.lastIndexOf('.');
+                    return dot > 0 ? name.substring(0, dot) : name;
+                }
+            }
+        } catch (Exception ignore) {
+            // 名称获取失败时用默认前缀
+        }
+        return "png";
+    }
+
     void resetAdBlurDefaults() {
         AdBlurConfig.setEnabled(false);
         AdBlurConfig.setBlurRadius(AdBlurConfig.DEFAULT_BLUR_RADIUS);
-        AdBlurConfig.setDetectEveryN(AdBlurConfig.DEFAULT_DETECT_EVERY_N);
+        AdBlurConfig.setBlurStyle(AdBlurConfig.DEFAULT_BLUR_STYLE);
+        AdBlurConfig.setMinConfidence(AdBlurConfig.DEFAULT_MIN_CONFIDENCE);
+        AdBlurConfig.setDetectIntervalMs(AdBlurConfig.DEFAULT_DETECT_INTERVAL_MS);
         AdBlurConfig.setMatchThreshold(AdBlurConfig.DEFAULT_MATCH_THRESHOLD);
         AdBlurConfig.setScaleMax(AdBlurConfig.DEFAULT_SCALE_MAX);
         AdBlurConfig.setFeather(AdBlurConfig.DEFAULT_FEATHER);
-        AdBlurConfig.setUseZxing(AdBlurConfig.DEFAULT_USE_ZXING);
         AdBlurController.get(a).notifyTemplatesChanged();
     }
 

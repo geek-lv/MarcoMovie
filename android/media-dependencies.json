@@ -42,26 +42,26 @@
   {
     "name": "collection",
     "group": "androidx.collection",
-    "version": "1.2.0",
+    "version": "1.0.0",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/collection/collection/1.2.0/collection-1.2.0.jar",
-    "sha256": "16d77e8c443fa55fe9a6074d00445d520ca5c9f913cefdbf4828356255214e42"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/collection/collection/1.0.0/collection-1.0.0.jar",
+    "sha256": "9c8d117b5c2bc120a1cdfeb857e05b495b16c36013570372a708f7827e3ac9f9"
   },
   {
     "name": "concurrent-futures",
     "group": "androidx.concurrent",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/concurrent/concurrent-futures/1.0.0/concurrent-futures-1.0.0.jar",
-    "sha256": "5595a40e278a7b39fa78a09490e3d7f3faa95c7b01447148bd38b5ade0605c35"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/concurrent/concurrent-futures/1.2.0/concurrent-futures-1.2.0.jar",
+    "sha256": "4810315a798690b5d3bb40c92bcd41c045fd2c36bbfc50b27cbac3d6a0eda190"
   },
   {
     "name": "core",
     "group": "androidx.core",
-    "version": "1.8.0",
+    "version": "1.7.0",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/core/core/1.8.0/core-1.8.0.aar",
-    "sha256": "48c64a15ec3eb11bfb33339e5ceb70ec7f821bd2dfa2eb8675ebd5353317e792"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/core/core/1.7.0/core-1.7.0.aar",
+    "sha256": "aaf6734226fff923784f92f65d78a2984dbf17534138855c5ce2038f18656e0b"
   },
   {
     "name": "core-ktx",
@@ -112,108 +112,100 @@
     "sha256": "dd294f4a689c71ff877fd41f3b67a3a62f7760d44ce420e6130f1fc3569d8f00"
   },
   {
-    "name": "media",
-    "group": "androidx.media",
-    "version": "1.7.0",
-    "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media/media/1.7.0/media-1.7.0.aar",
-    "sha256": "81a199ee87c6d3d59fb35f7dbec71b3f1d507128611099b6ac3a4b1c5a0bf1f9"
-  },
-  {
     "name": "media3-common",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-common/1.5.1/media3-common-1.5.1.aar",
-    "sha256": "ee69fc48b9ea9c5e1381cbf89bcab96e254fd7bd1f31891642bb4e1c1f6c6fd7"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-common/1.11.1/media3-common-1.11.1.aar",
+    "sha256": "50813cf219c7c93ed8a32a750891ca6d1280729ecf7a90c49567adacd67ef31b"
   },
   {
     "name": "media3-container",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-container/1.5.1/media3-container-1.5.1.aar",
-    "sha256": "b163c43acbb47244b3ffedc5f216f349cfc8ca9585d3b73b7f32b7228fd63dff"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-container/1.11.1/media3-container-1.11.1.aar",
+    "sha256": "930fca2f018f06f1d08c12599f8c97f31eddbd728edee5de06eb53a882f8fc54"
   },
   {
     "name": "media3-database",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-database/1.5.1/media3-database-1.5.1.aar",
-    "sha256": "13bf4ccce6bc9e8ef8e04a62e90fa6c1589b89bee8633f0db9f61ae2c23f6ef6"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-database/1.11.1/media3-database-1.11.1.aar",
+    "sha256": "520e6f814e42a7d428db187ac073b453c0fcba0f4f5f4edd1cf33fafd2cfb740"
   },
   {
     "name": "media3-datasource",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-      "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-datasource/1.5.1/media3-datasource-1.5.1.aar",
-      "sha256": "b86cfb137a94bf471d6b2802415edd4fe66038dab6986682133786ca7dd43de2"
-  },
-  {
-    "name": "media3-effect",
-    "group": "androidx.media3",
-    "version": "1.5.1",
-    "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-effect/1.5.1/media3-effect-1.5.1.aar",
-    "sha256": "29ca94492cc7ae86b7817da3449e2c29504cd7fdd410a8603b74098260291955"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-datasource/1.11.1/media3-datasource-1.11.1.aar",
+    "sha256": "490fd23c7562a6a1183d63bf854b291ae3a77dce5a151450aa1937148c80c60b"
   },
   {
     "name": "media3-decoder",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-decoder/1.5.1/media3-decoder-1.5.1.aar",
-    "sha256": "6cd78cad4c1ef8aa16876fcd923eefc3894b538960798698a891cc7f419b8b34"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-decoder/1.11.1/media3-decoder-1.11.1.aar",
+    "sha256": "c3bcd704959026e0d644b0260f9e682a2e26e7357c2cf82d990bcb323f800d49"
+  },
+  {
+    "name": "media3-effect",
+    "group": "androidx.media3",
+    "version": "1.11.1",
+    "license": "The Apache Software License, Version 2.0",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-effect/1.11.1/media3-effect-1.11.1.aar",
+    "sha256": "aacaf7d4cc410ee0e4fe731a1d1b156d22ce263a45bc6bf17a6dbd6f2182f0ab"
   },
   {
     "name": "media3-exoplayer",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer/1.5.1/media3-exoplayer-1.5.1.aar",
-    "sha256": "11bb9687acd2c0bdd0a99a32006c8ac632ac138ffd996ae7293f375514721b51"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer/1.11.1/media3-exoplayer-1.11.1.aar",
+    "sha256": "588592baec110837c33ce0c82bb76464203e6b0621177bbe5d88779001a6f1ed"
   },
   {
     "name": "media3-exoplayer-dash",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-dash/1.5.1/media3-exoplayer-dash-1.5.1.aar",
-    "sha256": "4cf70e6f0bea18cf30baa055c6ed0af9193426a6d62421a093da2c30a8a48c9f"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-dash/1.11.1/media3-exoplayer-dash-1.11.1.aar",
+    "sha256": "eda5ca5879d1016b2f6cb7a79fd8bef864017a3e62e8ece8c25b3a595373920c"
   },
   {
     "name": "media3-exoplayer-hls",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-hls/1.5.1/media3-exoplayer-hls-1.5.1.aar",
-    "sha256": "8c3ebcc8f7b285aade63cdd61721256db6f392e97d09c6c613196f8885c8bc0d"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-hls/1.11.1/media3-exoplayer-hls-1.11.1.aar",
+    "sha256": "bd7aeac8dc60b3ee926eddbe05e29f27dc53c81514cae3271b2edab693f34262"
   },
   {
     "name": "media3-exoplayer-rtsp",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-rtsp/1.5.1/media3-exoplayer-rtsp-1.5.1.aar",
-    "sha256": "6fc1ce8d7acaf981cc0c09c4eb97e59f9ca772c28645f09d52bd540d1fe12009"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-exoplayer-rtsp/1.11.1/media3-exoplayer-rtsp-1.11.1.aar",
+    "sha256": "d7585ab89e958041f803caf4cbd466077289eb7cd3a6d92ddc64f6a727872575"
   },
   {
     "name": "media3-extractor",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-extractor/1.5.1/media3-extractor-1.5.1.aar",
-    "sha256": "f2a146209e040409ed2cea3daa74932011c3b4ac451427f1738569821b21d084"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-extractor/1.11.1/media3-extractor-1.11.1.aar",
+    "sha256": "6b2d58d23a0c53425249d8b7c945600019d61a8b404c8fb8cd9ca860c5738508"
   },
   {
     "name": "media3-ui",
     "group": "androidx.media3",
-    "version": "1.5.1",
+    "version": "1.11.1",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-ui/1.5.1/media3-ui-1.5.1.aar",
-    "sha256": "01caff80faaf5cbc4304d70f971a41004865228b0e31188a34b9bd219bb1cdd8"
+    "url": "https://dl.google.com/dl/android/maven2/androidx/media3/media3-ui/1.11.1/media3-ui-1.11.1.aar",
+    "sha256": "bbd94f6d0e504931235d87275c3c5bf4f0a48e0008d8d12efc79f96fc8a3011f"
   },
   {
     "name": "recyclerview",
@@ -258,18 +250,18 @@
   {
     "name": "annotations",
     "group": "org.jetbrains",
-    "version": "13.0",
+    "version": "23.0.0",
     "license": "The Apache Software License, Version 2.0",
-    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/annotations/13.0/annotations-13.0.jar",
-    "sha256": "ace2a10dc8e2d5fd34925ecac03e4988b2c0f851650c94b8cef49ba1bd111478"
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/annotations/23.0.0/annotations-23.0.0.jar",
+    "sha256": "7b0f19724082cbfcbc66e5abea2b9bc92cf08a1ea11e191933ed43801eb3cd05"
   },
   {
     "name": "kotlin-stdlib",
     "group": "org.jetbrains.kotlin",
-    "version": "1.8.0",
+    "version": "2.2.10",
     "license": "The Apache License, Version 2.0",
-    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/1.8.0/kotlin-stdlib-1.8.0.jar",
-    "sha256": "c77bef8774640b9fb9d6e217459ff220dae59878beb7d2e4b430506feffc654e"
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.10/kotlin-stdlib-2.2.10.jar",
+    "sha256": "9c67cc79efd6b9215b49d2a4308f5f3433537376c7c88e89bdd6729bd096e61a"
   },
   {
     "name": "kotlin-stdlib-common",
@@ -278,5 +270,21 @@
     "license": "The Apache License, Version 2.0",
     "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-stdlib-common/1.8.0/kotlin-stdlib-common-1.8.0.jar",
     "sha256": "78ef93b59e603cc0fe51def9bd4c037b07cbace3b3b7806d1a490a42bc1f4cb2"
+  },
+  {
+    "name": "kotlinx-coroutines-core-jvm",
+    "group": "org.jetbrains.kotlinx",
+    "version": "1.9.0",
+    "license": "The Apache Software License, Version 2.0",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.9.0/kotlinx-coroutines-core-jvm-1.9.0.jar",
+    "sha256": "ad89c2892235e670f222d819cb3d81188143cb19a05b59df9889ae4269f5c70a"
+  },
+  {
+    "name": "kotlinx-coroutines-guava",
+    "group": "org.jetbrains.kotlinx",
+    "version": "1.9.0",
+    "license": "The Apache Software License, Version 2.0",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-guava/1.9.0/kotlinx-coroutines-guava-1.9.0.jar",
+    "sha256": "ca68323328a85a2df3c03429d5e7b124bc784f07fbace958399a5bba4118d7a0"
   }
 ]

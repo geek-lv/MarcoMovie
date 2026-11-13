@@ -1,11 +1,14 @@
 package com.pilipala.marcomovie;
 
 import android.app.Dialog;
+import android.content.Intent;
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.view.*;
 import android.widget.*;
+import com.pilipala.marcomovie.adblur.AdBlurTemplates;
 import java.util.*;
 
 /** Independent TV playback controls. Every visible action is wired to playback state. */
@@ -186,6 +189,7 @@ final class PlaybackControls {
             add(row, "倍速", "speed", this::speed);
             add(row, "音轨", "audio-tracks", () -> tracks(1));
             add(row, "解码", "decoder", this::decoderMenu);
+            add(row, "采集", "adblur-capture-tool", this::captureAdTemplate);
             add(row, "片头", "skip-intro-tool", () -> skip(true));
             add(row, "片尾", "skip-outro-tool", () -> skip(false));
             add(row, "更多", "more", this::more);
@@ -234,6 +238,7 @@ final class PlaybackControls {
             add(row, "音轨", "audio-tracks", () -> tracks(1));
             add(row, "解码", "decoder", this::decoderMenu);
             add(row, "弹幕", "danmaku-tool", this::danmaku);
+            add(row, "采集", "adblur-capture-tool", this::captureAdTemplate);
             add(row, "片头", "skip-intro-tool", () -> skip(true));
             add(row, "片尾", "skip-outro-tool", () -> skip(false));
             add(row, "循环", "repeat-tool", this::repeat);
@@ -764,6 +769,107 @@ final class PlaybackControls {
                         output();
                     }
                 });
+    }
+
+    /**
+     * 采集当前画面为「牛皮癣模糊」特征图。
+     *
+     * <p>交互直接基于横屏模式：暂停播放 → 抓取当前显示帧（VideoOutput.snapshotFullFrame，
+     * 不经 GL 特效管线，无 HDR / 数据空间问题，且无模板时也可用）→ 竖直翻转成 GL 朝向 →
+     * 进入框选编辑页（横屏）。
+     */
+    void captureAdTemplate() {
+        if (a.player == null || !a.prepared) {
+            showBubble("请先播放视频", new String[] {"知道了"}, -1, i -> {}, "");
+            return;
+        }
+        if (AdBlurTemplates.count(a) >= 8) {
+            showBubble("特征图已达上限（8 个）", new String[] {"知道了"}, -1, i -> {}, "");
+            return;
+        }
+        if (surface == null) {
+            showBubble("画面尚未就绪", new String[] {"知道了"}, -1, i -> {}, "");
+            return;
+        }
+        // 暂停播放：框选与截帧都基于静止画面
+        if (a.player != null) {
+            a.player.pause();
+            a.playing = false;
+        }
+        surface.snapshotFullFrame(
+                bmp -> {
+                    if (bmp != null) {
+                        openCaptureEditor(bmp);
+                        return;
+                    }
+                    // 回退：软渲染 / 特殊合成下 PixelCopy 取不到显示帧时，从媒体源按当前位置取帧
+                    captureFromSource();
+                });
+    }
+
+    /** 进入框选编辑：显示朝向 → GL 朝向（模板与逐帧检测同坐标系；左右不变，上下镜像）。 */
+    private void openCaptureEditor(Bitmap displayFrame) {
+        Bitmap gl = flipVertical(displayFrame);
+        displayFrame.recycle();
+        TemplateCaptureActivity.pending = gl;
+        a.startActivity(new Intent(a, TemplateCaptureActivity.class));
+    }
+
+    /**
+     * 回退抓帧：{@code MediaMetadataRetriever} 直接对媒体源按当前播放位置解码出帧，
+     * 不依赖 GPU 合成（模拟器软渲染、特殊 Surface 合成场景也能用）。
+     */
+    private void captureFromSource() {
+        final String url =
+                resolved == null
+                        ? ""
+                        : resolved.media
+                                .optString("url", resolved.url == null ? "" : resolved.url)
+                                .trim();
+        if (url.isEmpty()) {
+            showBubble("画面截取失败，请重试", new String[] {"知道了"}, -1, i -> {}, "");
+            return;
+        }
+        final long posMs = a.player == null ? 0 : Math.max(0, a.player.getCurrentPosition());
+        final java.util.HashMap<String, String> headers = new java.util.HashMap<>();
+        if (resolved != null && resolved.headers != null) headers.putAll(resolved.headers);
+        a.worker.execute(
+                () -> {
+                    Bitmap frame = null;
+                    android.media.MediaMetadataRetriever retriever =
+                            new android.media.MediaMetadataRetriever();
+                    try {
+                        if (headers.isEmpty()) retriever.setDataSource(url);
+                        else retriever.setDataSource(url, headers);
+                        frame =
+                                retriever.getFrameAtTime(
+                                        posMs * 1000L,
+                                        android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                    } catch (Throwable error) {
+                        AppLog.w("AdBlurCapture", "retriever frame failed url=" + url, error);
+                        frame = null;
+                    } finally {
+                        try {
+                            retriever.release();
+                        } catch (Throwable ignore) {
+                        }
+                    }
+                    final Bitmap grabbed = frame;
+                    a.ui.post(
+                            () -> {
+                                if (grabbed == null) {
+                                    showBubble("画面截取失败，请重试", new String[] {"知道了"}, -1, i -> {}, "");
+                                    return;
+                                }
+                                openCaptureEditor(grabbed);
+                            });
+                });
+    }
+
+    private static Bitmap flipVertical(Bitmap src) {
+        android.graphics.Matrix m = new android.graphics.Matrix();
+        m.setScale(1f, -1f, src.getWidth() / 2f, src.getHeight() / 2f);
+        return Bitmap.createBitmap(src, 0, 0, src.getWidth(), src.getHeight(), m, true);
     }
 
     void danmaku() {

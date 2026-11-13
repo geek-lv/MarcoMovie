@@ -125,6 +125,27 @@ def main():
         for old in folder.rglob(pattern):
             if not old.resolve().is_relative_to(boundary): raise RuntimeError('Generated output leaves build directory')
             old.unlink()
+    # 依赖 AAR 的 assets 合并：aapt2 不会自动带入依赖库资产。
+    # media3-effect 的 assets/shaders/*.glsl 是特效管线运行时经 AssetManager 加载的，
+    # 缺失会导致 DefaultShaderProgram 初始化抛 FileNotFoundException → 挂载特效的播放整体失败。
+    aar_assets_dir = BUILD / 'aar-assets'
+    aar_assets_dir.mkdir(parents=True, exist_ok=True)
+    for a in sorted(aar_assets_dir.rglob('*')):
+        if a.is_file(): a.unlink()
+    for aar in sorted((ROOT/'tools'/'java-dependencies').glob('*.aar')):
+        try:
+            with zipfile.ZipFile(aar) as z:
+                for entry in z.infolist():
+                    if entry.is_dir() or not entry.filename.startswith('assets/'): continue
+                    # 剥掉 AAR 内部的 assets/ 前缀：aapt2 -A 的目录内容即为资产根，
+                    # 运行时 AssetManager 按「shaders/xxx.glsl」相对路径查找
+                    rel = entry.filename[len('assets/'):]
+                    if not rel: continue
+                    dest = aar_assets_dir / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_bytes(z.read(entry.filename))
+        except Exception as e:
+            raise RuntimeError(f'AAR assets merge failed: {aar.name}: {e}')
     run(exe(SDK,'aapt2'),'compile','--dir',SRC/'res','-o',BUILD/'resources.zip')
     overlays=[]
     for i,folder in enumerate(resource_dirs):
@@ -133,7 +154,7 @@ def main():
     for old in generated.rglob('*.java'):old.unlink()
     extra=['--extra-packages',':'.join(sorted(set(packages)))] if packages else []
     # sherpa-onnx 的 JNI 直接通过 AssetManager 读模型，未压缩更稳妥（也避免运行时解压开销）
-    run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources.apk','--manifest',SRC/'AndroidManifest.xml','-I',ANDROID,'-A',SRC/'assets','-A',catpaw_tv_assets,'--java',generated,'--auto-add-overlay','-0','onnx',*extra,*overlays,'-R',BUILD/'resources.zip')
+    run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources.apk','--manifest',SRC/'AndroidManifest.xml','-I',ANDROID,'-A',aar_assets_dir,'-A',SRC/'assets','-A',catpaw_tv_assets,'--java',generated,'--auto-add-overlay','-0','onnx',*extra,*overlays,'-R',BUILD/'resources.zip')
     sources=sorted((SRC/'java').rglob('*.java'))+sorted((ROOT/'shared/java').rglob('*.java'))+sorted(generated.rglob('*.java'))
     run(exe(JDK/'bin','javac'),'-encoding','UTF-8','-source','8','-target','8','-Xlint:-options','-classpath',os.pathsep.join(str(p) for p in [ANDROID,*dependencies]),'-d',BUILD/'classes',*sources)
     with zipfile.ZipFile(BUILD/'classes.jar','w',zipfile.ZIP_DEFLATED) as z:
@@ -169,7 +190,7 @@ def main():
         tv_xml = re.sub(r'android:versionCode="[^"]+"', f'android:versionCode="{tv_version_code}"', tv_xml)
         tv_xml = re.sub(r'android:versionName="[^"]+"', f'android:versionName="{tv_version}"', tv_xml)
         tv_manifest.write_text(tv_xml, encoding='utf-8')
-        run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources.apk','--manifest',tv_manifest,'-I',ANDROID,'-A',SRC/'assets','-A',catpaw_tv_assets,'--auto-add-overlay','-0','onnx',*extra,*overlays,'-R',BUILD/'resources.zip')
+        run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources.apk','--manifest',tv_manifest,'-I',ANDROID,'-A',aar_assets_dir,'-A',SRC/'assets','-A',catpaw_tv_assets,'--auto-add-overlay','-0','onnx',*extra,*overlays,'-R',BUILD/'resources.zip')
         with zipfile.ZipFile(BUILD/'resources.apk') as source, zipfile.ZipFile(BUILD/'unsigned.apk','w',zipfile.ZIP_DEFLATED) as dest:
             for entry in source.infolist():dest.writestr(entry,source.read(entry.filename))
             for dex in (BUILD/'dex').glob('*.dex'):dest.write(dex,dex.name)
@@ -202,7 +223,7 @@ def main():
     mobile_xml=re.sub(r'android:versionCode="[^"]+"', f'android:versionCode="{mobile_version_code}"', mobile_xml)
     mobile_xml=re.sub(r'android:versionName="[^"]+"', f'android:versionName="{mobile_version}"', mobile_xml)
     mobile_manifest.write_text(mobile_xml,encoding='utf-8')
-    run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources-mobile.apk','--manifest',mobile_manifest,'-I',ANDROID,'-A',SRC/'assets','-A',catpaw_mobile_assets,'--auto-add-overlay','-0','onnx',*extra,*overlays,'-R',BUILD/'resources.zip')
+    run(exe(SDK,'aapt2'),'link','-o',BUILD/'resources-mobile.apk','--manifest',mobile_manifest,'-I',ANDROID,'-A',aar_assets_dir,'-A',SRC/'assets','-A',catpaw_mobile_assets,'--auto-add-overlay','-0','onnx',*extra,*overlays,'-R',BUILD/'resources.zip')
     with zipfile.ZipFile(BUILD/'resources-mobile.apk') as source, zipfile.ZipFile(BUILD/'unsigned-mobile.apk','w',zipfile.ZIP_DEFLATED) as dest:
         for entry in source.infolist():dest.writestr(entry,source.read(entry.filename))
         for dex in (BUILD/'dex').glob('*.dex'):dest.write(dex,dex.name)

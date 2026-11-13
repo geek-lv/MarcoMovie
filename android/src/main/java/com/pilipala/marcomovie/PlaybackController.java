@@ -34,6 +34,24 @@ final class PlaybackController {
                 : String.format(Locale.ROOT, "%02d:%02d", sec / 60, sec % 60);
     }
 
+    /**
+     * 优先以视图方式挂视频输出：使用 Media3 视频特效时，输出尺寸必须由视图解析
+     * （裸 Surface 无法提供尺寸 → 特效最终包装器持续丢帧 → 黑屏，日志：
+     * {@code FinalShaderWrapper: Output surface and size not set, dropping frame.}）。
+     * 系统/第三方播放器（SystemPlayer）不支持视图 API，退回裸 Surface。
+     */
+    private static void attachOutput(VideoOutput output, MoviePlayer player, Surface fallback) {
+        if (player == null) return;
+        if (output != null && !(player instanceof SystemPlayer)) {
+            android.view.SurfaceView view = output.surfaceView();
+            if (view != null) {
+                player.setSurfaceView(view);
+                return;
+            }
+        }
+        player.setSurface(fallback);
+    }
+
     static void stopMagnet(MainActivity a) {
         if (a.magnetStream != null) {
             a.magnetStream.close();
@@ -1077,17 +1095,19 @@ final class PlaybackController {
                 });
         a.setContentView(a.root);
         if (!a.isTvDevice()) a.root.requestApplyInsets();
+        a.activePlayerOutput = surface;
         surface.listen(
                 new VideoOutput.Listener() {
                     Surface renderSurface;
                     int surfaceRevision;
 
                     public void available(Surface value) {
+                        if (surface != a.activePlayerOutput) return; // 陈旧输出：忽略
                         renderSurface = value;
                         final int revision = ++surfaceRevision;
                         if (ticket != a.generation) return;
                         if (a.player != null) {
-                            a.player.setSurface(value);
+                            attachOutput(surface, a.player, value);
                             return;
                         }
                         a.worker.execute(
@@ -1132,7 +1152,7 @@ final class PlaybackController {
                                                         return;
                                                     }
                                                     a.player = ready;
-                                                    ready.setSurface(renderSurface);
+                                                    attachOutput(surface, ready, renderSurface);
                                                     ready.bindSubtitles(
                                                             controls.subtitle,
                                                             text -> {
@@ -1479,7 +1499,14 @@ final class PlaybackController {
 
                     public void destroyed() {
                         surfaceRevision++;
-                        if (ticket == a.generation && a.player != null) a.player.setSurface(null);
+                        // 仅当前活跃输出可清除播放器表面：换集/换源会在同代内重建播放页，
+                        // 旧输出被移除时触发的本回调若无条件 setSurface(null)，会把新播放器
+                        // 刚挂上的输出表面一起清掉 → 新播放器黑屏（有声音、无画面）。
+                        if (surface == a.activePlayerOutput
+                                && ticket == a.generation
+                                && a.player != null) {
+                            a.player.setSurface(null);
+                        }
                         renderSurface = null;
                     }
                 });

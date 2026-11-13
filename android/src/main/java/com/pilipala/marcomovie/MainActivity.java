@@ -144,6 +144,13 @@ public final class MainActivity extends Activity {
     boolean miniMode;
     boolean changingMiniEpisode;
     FrameLayout playerOverlay;
+
+    /**
+     * 当前播放页活跃的视频输出。换集/换源会重建播放页并产生新的 VideoOutput；
+     * 旧输出的销毁回调不得清除新播放器的输出表面（否则新播放器黑屏）。
+     */
+    VideoOutput activePlayerOutput;
+
     boolean controlsVisible = true;
     Runnable hideControls;
     PlayerChrome playerChrome;
@@ -748,6 +755,28 @@ public final class MainActivity extends Activity {
     private boolean lastPortraitKnown;
     private boolean lastPortraitLayout;
 
+    // 防「重排风暴」：setContentView 重建自身会触发 decor 的瞬时布局抖动，若据此立即重排会
+    // 陷入「重排→布局变化→再重排」死循环。用 relayoutScheduled 合并重入，并用 debounce 只在
+    // 尺寸「稳定」后才真正重排（分屏拖拽等真实尺寸变化是稳定的，瞬时抖动不是）。
+    private boolean relayoutScheduled;
+    private int candidateRelayoutW, candidateRelayoutH;
+    // MobileShell.render() 期间置 true，阻止 onLayoutChange 监听器递归调用 MobileShell.show(a)。
+    // 否则 setContentView → onLayoutChange → MobileShell.show → render → setContentView 形成死循环。
+    boolean shellRendering;
+    private final android.os.Handler relayoutHandler =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable relayoutSettleCheck =
+            new Runnable() {
+                @Override
+                public void run() {
+                    relayoutScheduled = false;
+                    // 同方向尺寸变化（1080x1824 ↔ 1080x1920）不触发整体重建。
+                    // 视图尺寸由 Android 布局系统自动适配；若在此调用 scheduleOrientationRelayout，
+                    // 会走 refresh → MobileShell.show → render → setContentView → onLayoutChange
+                    // 把 usableHeight 改回视图尺寸 → onWindowSizeChanged 再次 SIZE_CANDIDATE 的无限循环。
+                }
+            };
+
     @Override
     public void onAttachedToWindow() {
         super.onAttachedToWindow();
@@ -766,30 +795,54 @@ public final class MainActivity extends Activity {
 
     private void onWindowSizeChanged(final int w, final int h) {
         if (w <= 0 || h <= 0) return;
-        final int oldW = usableWidth, oldH = usableHeight;
-        usableWidth = w;
-        usableHeight = h;
         final boolean portrait = TvLayoutPolicy.isPortrait(w, h);
         if (!lastPortraitKnown) {
+            usableWidth = w;
+            usableHeight = h;
             lastPortraitKnown = true;
             lastPortraitLayout = portrait;
             return;
         }
-        if (portrait == lastPortraitLayout) {
-            // 同一方向下的窗口变化（分屏拖拽、缩放手势）也重新排版，但避免首帧抖动的微小差值
-            if (oldW > 0 && oldH > 0 && (Math.abs(oldW - w) > 16 || Math.abs(oldH - h) > 16))
-                scheduleOrientationRelayout();
+        if (portrait != lastPortraitLayout) {
+            usableWidth = w;
+            usableHeight = h;
+            lastPortraitLayout = portrait;
+            scheduleOrientationRelayout();
             return;
         }
-        lastPortraitLayout = portrait;
-        scheduleOrientationRelayout();
+        // 同方向下的窗口变化（分屏拖拽）也重新排版，但要求尺寸「稳定」后才触发：
+        // setContentView 重建自身引起的瞬时布局抖动不算数，否则会无限循环重排。
+        if (Math.abs(usableWidth - w) > 16 || Math.abs(usableHeight - h) > 16) {
+            flicker(
+                    "SIZE_CANDIDATE old="
+                            + usableWidth
+                            + "x"
+                            + usableHeight
+                            + " new="
+                            + w
+                            + "x"
+                            + h);
+            candidateRelayoutW = w;
+            candidateRelayoutH = h;
+            if (!relayoutScheduled) {
+                relayoutScheduled = true;
+                relayoutHandler.removeCallbacks(relayoutSettleCheck);
+                relayoutHandler.postDelayed(relayoutSettleCheck, 250);
+            }
+        }
+        usableWidth = w;
+        usableHeight = h;
     }
 
     private void scheduleOrientationRelayout() {
+        flicker("RELAYOUT_SCHEDULE root=" + System.identityHashCode(root));
         if (!layoutReady || root == null) return;
+        if (relayoutScheduled) return; // 合并重入，避免重建自身触发的抖动再次触发重排
+        relayoutScheduled = true;
         final View anchor = root;
         anchor.post(
                 () -> {
+                    relayoutScheduled = false;
                     if (isFinishing() || isDestroyed() || root == null) return;
                     if (current != null && current.player) {
                         if (playerChrome != null) playerChrome.relayout();
@@ -835,7 +888,8 @@ public final class MainActivity extends Activity {
         int w = root.getWidth(), h = root.getHeight();
         if (w <= 0 || h <= 0) return;
         boolean orientationFlipped = (w < h) != (usableWidth < usableHeight);
-        if (w != usableWidth || h != usableHeight) {
+        if (orientationFlipped) {
+            // 方向确实翻转：更新尺寸并整体重建
             usableWidth = w;
             usableHeight = h;
             if (current != null && current.player) {
@@ -843,10 +897,13 @@ public final class MainActivity extends Activity {
                 if (playbackControls != null)
                     playbackControls.resize(
                             playbackControls.videoWidth, playbackControls.videoHeight);
-            } else if (current != null && orientationFlipped) {
+            } else if (current != null) {
                 refresh();
             }
         }
+        // 同方向仅尺寸微调（视图 1080x1824 vs 窗口 1080x1920，差 96px 状态栏）
+        // 不更新 usableWidth/Height，否则 onWindowSizeChanged 会反复 SIZE_CANDIDATE。
+        // usableWidth/Height 由 onWindowSizeChanged 统一管理。
     }
 
     void watchRootLayout(FrameLayout targetRoot) {
@@ -1225,7 +1282,18 @@ public final class MainActivity extends Activity {
                 });
     }
 
+    static void flicker(String message) {
+        android.util.Log.d("MM_FLICKER", message);
+    }
+
+    static void flickerStack(String message) {
+        android.util.Log.d(
+                "MM_FLICKER",
+                message + "\n" + android.util.Log.getStackTraceString(new Throwable()));
+    }
+
     void refresh() {
+        flickerStack("ACTIVITY_REFRESH root=" + System.identityHashCode(root));
         capture();
         Screen s = current;
         s.render.run();
@@ -1287,8 +1355,11 @@ public final class MainActivity extends Activity {
                 return;
             }
             if (!isTvDevice() && MobileShell.activeTab != 0) {
-                MobileShell.activeTab = 0;
-                MobileShell.show(this);
+                if (current.mobileHome != null) current.mobileHome.switchTab(0);
+                else {
+                    MobileShell.activeTab = 0;
+                    MobileShell.show(this);
+                }
                 return;
             }
             releasePlayer();

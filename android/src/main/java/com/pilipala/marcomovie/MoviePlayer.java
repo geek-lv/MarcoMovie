@@ -18,6 +18,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 import androidx.media3.effect.GlEffect;
+import com.pilipala.marcomovie.adblur.AdBlurConfig;
 import com.pilipala.marcomovie.adblur.AdBlurController;
 import com.pilipala.marcomovie.adblur.AdBlurTemplates;
 import java.io.InputStream;
@@ -290,6 +291,7 @@ public class MoviePlayer {
 
                                 @Override
                                 public void onVideoSizeChanged(VideoSize size) {
+                                    maybeSuspendEffectsForHdr();
                                     if (!released && sizeListener != null)
                                         sizeListener.onVideoSizeChanged(
                                                 MoviePlayer.this,
@@ -300,6 +302,21 @@ public class MoviePlayer {
                                 @Override
                                 public void onPlayerError(PlaybackException error) {
                                     if (released) return;
+                                    // 特效管线不兼容（HDR / 元数据异常片源）→ 临时卸下特效重试，
+                                    // 优先保证播放不中断（模糊降级为不可用）。同一媒体项内不再重挂。
+                                    if (!AdBlurController.get(context).effectsSuspended()
+                                            && AdBlurTemplates.count(context) > 0
+                                            && isEffectsPipelineFailure(error)) {
+                                        AdBlurController.get(context).suspendEffects();
+                                        AppLog.w("AdBlur", "特效管线失败，已临时关闭模糊重试播放", error);
+                                        try {
+                                            applyAdBlurEffect();
+                                            exo.setMediaSource(playbackSource(uri));
+                                            exo.prepare();
+                                            return;
+                                        } catch (Exception ignored) {
+                                        }
+                                    }
                                     if (!hlsFallbackAttempted
                                             && uri != null
                                             && mediaSourceFactory != null) {
@@ -440,6 +457,8 @@ public class MoviePlayer {
                     check();
                     this.uri = uri;
                     this.headers = Collections.unmodifiableMap(new LinkedHashMap<>(headers));
+                    // 新的媒体项：重置特效停用标志，让本条片源重新尝试启用模糊
+                    AdBlurController.get(context).resumeEffects();
                     return null;
                 });
     }
@@ -449,6 +468,20 @@ public class MoviePlayer {
                 () -> {
                     check();
                     exo.setVideoSurface(surface);
+                    return null;
+                });
+    }
+
+    /**
+     * 以视图方式设置视频输出。使用 Media3 视频特效时输出尺寸必须由视图解析
+     * （裸 Surface 无法提供尺寸 → 特效最终包装器持续丢帧 → 黑屏）：
+     * {@code FinalShaderWrapper: Output surface and size not set, dropping frame.}
+     */
+    public void setSurfaceView(android.view.SurfaceView view) {
+        onMain(
+                () -> {
+                    check();
+                    exo.setVideoSurfaceView(view);
                     return null;
                 });
     }
@@ -529,18 +562,129 @@ public class MoviePlayer {
     /**
      * 把「牛皮癣模糊」后处理特效挂到播放器。应在 {@code exo.build()} 之后、{@code prepare()} 之前调用。
      *
-     * <p>只要有特征图就挂载特效：特效内部会实时读取 {@code AdBlurConfig.isEnabled()} 与模板目录，
-     * 实现「开关 / 增删特征图」免重配置生效；无特征图时不挂载，零开销。
+     * <p>两阶段设计：
+     * <ul>
+     *   <li><b>采集</b>（点菜单「采集」抓当前画面截图）：走 {@code VideoOutput.snapshotFullFrame}
+     *       抓显示帧，与本管线无关，无模板时也可用；</li>
+     *   <li><b>滤镜</b>（有模板后实时模糊）：需要 GL 特效管线，因此<b>有模板才挂载</b>；
+     *       特效内部实时读取 {@code AdBlurConfig.isEnabled()}，开关免重配置生效。</li>
+     * </ul>
+     *
+     * <p>必须条件挂载的原因：GL 特效管线会接管视频输出，部分 HDR / 数据空间特殊的片源
+     * 在硬件 GPU 上会出现黑屏（EglImage dataspace 反复重建）；无模板时走普通 Surface
+     * 输出路径，画面始终正常。
      */
     private void applyAdBlurEffect() {
         if (exo == null) return;
-        if (AdBlurTemplates.count(context) > 0) {
+        boolean suspended = AdBlurController.get(context).effectsSuspended();
+        int templates = AdBlurTemplates.count(context);
+        boolean enabled = AdBlurConfig.isEnabled();
+        AppLog.i(
+                "AdBlur",
+                "apply: templates="
+                        + templates
+                        + " enabled="
+                        + enabled
+                        + " suspended="
+                        + suspended
+                        + " → "
+                        + (!suspended && templates > 0 ? "挂载" : "不挂载"));
+        if (!suspended && templates > 0) {
             AdBlurController.get(context).setOnReload(this::applyAdBlurEffect);
             Object fx = AdBlurController.get(context).buildEffect();
             exo.setVideoEffects(Collections.singletonList((GlEffect) fx));
+            armEffectWatchdog();
         } else {
             exo.setVideoEffects(Collections.emptyList());
         }
+    }
+
+    private final android.os.Handler effectWatchdog =
+            new android.os.Handler(android.os.Looper.getMainLooper());
+    private Runnable effectWatchdogTask;
+
+    /**
+     * 播放器侧看门狗：特效挂载后，若「正在播放」但特效管线连续多秒零输出帧
+     * （管线停摆，如输出表面未就绪 → 表现为黑屏且无异常），自动停用特效并卸载，
+     * 播放回到普通输出路径。特效内部的 drawFrame 探针在停摆时不会运行，故需本外部看门狗。
+     */
+    private void armEffectWatchdog() {
+        final Runnable previous = effectWatchdogTask;
+        if (previous != null) effectWatchdog.removeCallbacks(previous);
+        effectWatchdogTask =
+                new Runnable() {
+                    int idleChecks = 0;
+                    long lastFrames = -1;
+
+                    @Override
+                    public void run() {
+                        if (released) return;
+                        AdBlurController controller = AdBlurController.get(context);
+                        com.pilipala.marcomovie.adblur.QrAdBlurEffect current =
+                                controller.getCurrentEffect();
+                        if (current == null) return;
+                        long now = current.processedFrames();
+                        if (lastFrames < 0) lastFrames = now;
+                        boolean playing =
+                                exo != null
+                                        && exo.getPlaybackState()
+                                                == androidx.media3.common.Player.STATE_READY
+                                        && exo.isPlaying();
+                        if (playing && now <= lastFrames) idleChecks++;
+                        else idleChecks = 0;
+                        if (idleChecks >= 3) {
+                            controller.suspendEffects();
+                            AppLog.i("AdBlur", "特效管线无输出帧（停摆），已自动停用模糊并卸载");
+                            applyAdBlurEffect();
+                            return;
+                        }
+                        lastFrames = Math.max(lastFrames, now);
+                        effectWatchdog.postDelayed(this, 2000);
+                    }
+                };
+        effectWatchdog.postDelayed(effectWatchdogTask, 2500);
+    }
+
+    /**
+     * HDR 片源防御：特效仅支持 SDR，HDR 输入在部分设备上会让管线解析输出尺寸失败
+     * （{@code Presentation.createForWidthAndHeight(-1)}）并伴随每帧 EglImage 数据空间重建，
+     * 表现为黑屏。检测到视频轨为 HDR 时停用特效并卸下，播放保持正常。
+     */
+    private void maybeSuspendEffectsForHdr() {
+        AdBlurController controller = AdBlurController.get(context);
+        if (controller.effectsSuspended() || exo == null) return;
+        androidx.media3.common.Format format;
+        try {
+            format = exo.getVideoFormat();
+        } catch (RuntimeException unavailable) {
+            return;
+        }
+        if (format == null || format.colorInfo == null) return;
+        if (androidx.media3.common.ColorInfo.isTransferHdr(format.colorInfo)) {
+            controller.suspendEffects();
+            AppLog.i("AdBlur", "HDR 片源，已跳过实时模糊（特效仅支持 SDR）");
+            applyAdBlurEffect();
+        }
+    }
+
+    /** 判断播放错误是否来自 GL 特效管线（含宽高解析 / 帧处理失败）。 */
+    private static boolean isEffectsPipelineFailure(PlaybackException error) {
+        if (error == null) return false;
+        if (error.errorCode == PlaybackException.ERROR_CODE_VIDEO_FRAME_PROCESSING_FAILED) {
+            return true;
+        }
+        for (Throwable t = error; t != null; t = t.getCause()) {
+            String name = t.getClass().getName();
+            if (name.startsWith("androidx.media3.effect")
+                    || name.contains("VideoFrameProcessingException")) {
+                return true;
+            }
+            if (t instanceof IllegalArgumentException
+                    && String.valueOf(t.getMessage()).contains("must be positive")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public void prepareAsync() {

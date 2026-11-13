@@ -1,0 +1,703 @@
+{
+ "_meta": {
+  "generated_at": "2026-11-10 04:10:07",
+  "generator": "sub_server/gen_sub.py",
+  "variant": "safe",
+  "note": "净化版: 已剔除少儿不宜站",
+  "sites": 31,
+  "source": "auto_crawl/auto_full.json + sub_server/gh_cms.json",
+  "candidates": 62,
+  "adult_dropped": 29,
+  "health_dropped": 2,
+  "health_skipped": false
+ },
+ "headers": [
+  {
+   "header": {
+    "Referer": "https://movie.douban.com"
+   },
+   "host": "img\\d+.doubanio.com"
+  }
+ ],
+ "lives": [
+  {
+   "name": "初秋语•ipv4",
+   "type": 0,
+   "url": "https://raw.githubusercontent.com/qist/tvbox/master/list.txt",
+   "playerType": 2,
+   "epg": "http://epg.cdn.loc.cc/?ch={name}&date={date}",
+   "logo": "https://live.fanmingming.com/tv/{name}.png"
+  },
+  {
+   "name": "YanG•综合",
+   "type": 0,
+   "url": "https://tv.iill.top/m3u/Gather",
+   "ua": "okhttp/3.15",
+   "playerType": 2,
+   "epg": "http://epg.cdn.loc.cc/?ch={name}&date={date}"
+  },
+  {
+   "name": "YanG•直播",
+   "type": 0,
+   "url": "https://tv.iill.top/m3u/Live",
+   "ua": "okhttp/3.15",
+   "playerType": 2
+  },
+  {
+   "name": "YanG•体育",
+   "type": 0,
+   "url": "https://tv.iill.top/m3u/Sport",
+   "ua": "okhttp/3.15",
+   "playerType": 2
+  },
+  {
+   "name": "范明明•ipv6",
+   "type": 0,
+   "url": "https://live.fanmingming.com/tv/m3u/ipv6.m3u",
+   "playerType": 2,
+   "epg": "http://epg.cdn.loc.cc/?ch={name}&date={date}",
+   "logo": "https://logo.wyfc.qzz.io/{name}.png"
+  },
+  {
+   "name": "YueChan•综合",
+   "type": 0,
+   "url": "https://github.moeyy.xyz/https://raw.githubusercontent.com/YueChan/Live/main/IPTV.m3u",
+   "playerType": 1,
+   "epg": "http://epg.cdn.loc.cc/?ch={name}&date={date}",
+   "logo": "https://logo.wyfc.qzz.io/{name}.png"
+  },
+  {
+   "name": "Yoursmile•综合",
+   "type": 0,
+   "url": "https://agit.ai/Yoursmile7/TVBox/raw/branch/master/live.txt",
+   "playerType": 1,
+   "epg": "http://epg.cdn.loc.cc/?ch={name}&date={date}",
+   "logo": "https://logo.wyfc.qzz.io/{name}.png"
+  },
+  {
+   "name": "MemoryC•综合",
+   "type": 0,
+   "url": "https://ghp.ci/raw.githubusercontent.com/MemoryCollection/IPTV/refs/heads/main/itvlist.m3u",
+   "playerType": 1,
+   "ua": "okhttp/3.15",
+   "epg": "http://epg.cdn.loc.cc/?ch={name}&date={date}",
+   "logo": "https://logo.wyfc.qzz.io/{name}.png"
+  },
+  {
+   "name": "肥猫•综合",
+   "type": 0,
+   "url": "http://我不是.肥猫.live/TV/tvzb.txt",
+   "playerType": 1,
+   "epg": "http://epg.cdn.loc.cc/?ch={name}&date={date}",
+   "logo": "https://logo.wyfc.qzz.io/{name}.png"
+  },
+  {
+   "name": "Ray•综合",
+   "type": 0,
+   "url": "https://github.moeyy.xyz/https://raw.githubusercontent.com/dxawi/0/main/tvlive.txt",
+   "playerType": 1,
+   "epg": "http://epg.cdn.loc.cc/?ch={name}&date={date}",
+   "logo": "https://logo.wyfc.qzz.io/{name}.png"
+  },
+  {
+   "name": "俊于•综合",
+   "type": 0,
+   "url": "http://home.jundie.top:81/Cat/tv/live.txt",
+   "playerType": 1,
+   "epg": "http://epg.cdn.loc.cc/?ch={name}&date={date}",
+   "logo": "https://logo.wyfc.qzz.io/{name}.png"
+  },
+  {
+   "name": "初秋语•电台",
+   "type": 0,
+   "url": "https://raw.githubusercontent.com/qist/tvbox/master/radio.txt",
+   "playerType": 1
+  },
+  {
+   "name": "范明明•电台1",
+   "type": 0,
+   "url": "https://github.moeyy.xyz/https://raw.githubusercontent.com/fanmingming/live/main/radio/m3u/fm.m3u",
+   "playerType": 1
+  },
+  {
+   "name": "范明明•电台2",
+   "type": 0,
+   "url": "https://github.moeyy.xyz/https://raw.githubusercontent.com/fanmingming/live/main/radio/m3u/index.m3u",
+   "playerType": 1
+  },
+  {
+   "name": "16万•MV",
+   "type": 0,
+   "url": "https://github.moeyy.xyz/https://raw.githubusercontent.com/lystv/short/main/影视/tvb/MTV.txt"
+  },
+  {
+   "name": "YuanHsing•油管",
+   "type": 0,
+   "url": "https://github.moeyy.xyz/https://raw.githubusercontent.com/YuanHsing/YouTube_to_m3u/main/youtube.m3u"
+  }
+ ],
+ "parses": [
+  {
+   "name": "虾米",
+   "type": 0,
+   "ext": {
+    "header": {
+     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36 Edg/110.0.1587.57"
+    }
+   },
+   "url": "https://jx.xmflv.com/?url="
+  },
+  {
+   "name": "虾米",
+   "type": 0,
+   "url": "https://jx.xmflv.com/?url="
+  },
+  {
+   "name": "OK",
+   "type": 0,
+   "url": "https://okjx.cc/?url="
+  },
+  {
+   "name": "聚合",
+   "type": 3,
+   "url": "Parse"
+  },
+  {
+   "name": "Json聚合",
+   "type": 3,
+   "url": "Demo"
+  },
+  {
+   "name": "PM",
+   "url": "https://www.playm3u8.cn/jiexi.php?url=",
+   "type": 0,
+   "ext": {
+    "flag": [
+     "qiyi",
+     "imgo",
+     "爱奇艺",
+     "奇艺",
+     "qq",
+     "腾讯",
+     "youku",
+     "优酷",
+     "pptv",
+     "PPTV",
+     "letv",
+     "乐视",
+     "leshi",
+     "bilibili",
+     "哔哩哔哩",
+     "哔哩",
+     "mgtv",
+     "芒果",
+     "sohu",
+     "xigua",
+     "fun",
+     "风行"
+    ],
+    "header": {
+     "User-Agent": "Mozilla/5.0"
+    }
+   },
+   "header": {
+    "User-Agent": "Mozilla/5.0"
+   }
+  },
+  {
+   "name": "m3u8",
+   "type": 0,
+   "url": "https://jx.m3u8.tv/jiexi/?url="
+  },
+  {
+   "name": "8090",
+   "url": "https://www.8090.la/8090/?url=",
+   "type": 0,
+   "ext": {
+    "flag": [
+     "qiyi",
+     "imgo",
+     "爱奇艺",
+     "奇艺",
+     "qq",
+     "腾讯",
+     "youku",
+     "优酷",
+     "pptv",
+     "PPTV",
+     "letv",
+     "乐视",
+     "leshi",
+     "bilibili",
+     "哔哩哔哩",
+     "哔哩",
+     "mgtv",
+     "芒果",
+     "sohu",
+     "xigua",
+     "fun",
+     "风行"
+    ],
+    "header": {
+     "User-Agent": "Mozilla/5.0"
+    }
+   },
+   "header": {
+    "User-Agent": "Mozilla/5.0"
+   }
+  },
+  {
+   "name": "看看",
+   "type": 0,
+   "url": "https://jx.m3u8.pw/?url="
+  },
+  {
+   "name": "咸鱼",
+   "type": 0,
+   "url": "https://jx.xyflv.cc/?url=",
+   "ext": {
+    "header": {
+     "user-agent": "Mozilla/5.0(Linux;Android13;V2049ABuild/TP1A.220624.014;wv)AppleWebKit/537.36(KHTML,likeGecko)Version/4.0Chrome/116.0.0.0MobileSafari/537.36",
+     "referer": "https://www.xyflv.cc/"
+    }
+   }
+  },
+  {
+   "name": "云解析",
+   "type": 0,
+   "url": "https://jx.yparse.com/index.php?url=",
+   "ext": {
+    "header": {
+     "user-agent": "Mozilla/5.0(Linux;Android13;V2049ABuild/TP1A.220624.014;wv)AppleWebKit/537.36(KHTML,likeGecko)Version/4.0Chrome/116.0.0.0MobileSafari/537.36"
+    }
+   }
+  },
+  {
+   "name": "爱豆",
+   "type": 0,
+   "url": "https://jx.aidouer.net/?url=",
+   "ext": {
+    "header": {
+     "user-agent": "Mozilla/5.0(Linux;Android13;V2049ABuild/TP1A.220624.014;wv)AppleWebKit/537.36(KHTML,likeGecko)Version/4.0Chrome/116.0.0.0MobileSafari/537.36",
+     "referer": "https://jiejie.uk/"
+    }
+   }
+  },
+  {
+   "name": "巧技",
+   "type": 1,
+   "url": "http://pan.qiaoji8.com/tvbox/neibu.php?url=",
+   "ext": {
+    "flag": [
+     "qq",
+     "腾讯",
+     "qiyi",
+     "爱奇艺",
+     "奇艺",
+     "youku",
+     "优酷",
+     "sohu",
+     "搜狐",
+     "letv",
+     "乐视",
+     "mgtv",
+     "芒果",
+     "tnmb",
+     "seven",
+     "bilibili",
+     "1905"
+    ],
+    "header": {
+     "User-Agent": "okhttp/4.9.1"
+    }
+   }
+  },
+  {
+   "name": "巧技二",
+   "type": 1,
+   "url": "http://pan.qiaoji8.com/tvbox/gouzi.php?url=",
+   "ext": {
+    "flag": [
+     "qq",
+     "腾讯",
+     "qiyi",
+     "爱奇艺",
+     "奇艺",
+     "youku",
+     "优酷",
+     "sohu",
+     "搜狐",
+     "letv",
+     "乐视",
+     "mgtv",
+     "芒果",
+     "tnmb",
+     "seven",
+     "bilibili",
+     "1905",
+     "NetFilx"
+    ],
+    "header": {
+     "User-Agent": "okhttp/4.9.1"
+    }
+   }
+  }
+ ],
+ "flags": [
+  "youku",
+  "qq",
+  "iqiyi",
+  "qiyi",
+  "letv",
+  "sohu",
+  "mgtv",
+  "bilibili",
+  "renrenmi",
+  "cntv",
+  "pptv",
+  "1905"
+ ],
+ "sites": [
+  {
+   "key": "sub_30486df39d",
+   "name": "🎬建安资源",
+   "type": 1,
+   "api": "http://154.219.117.232:9981/jacloudapi.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_f9ebea4c23",
+   "name": "🎬猫眼资源",
+   "type": 1,
+   "api": "https://api.maoyanapi.top/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_42bf716665",
+   "name": "ffzy5",
+   "type": 1,
+   "api": "https://ffzy5.tv/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_62869c2cc7",
+   "name": "🎬无尽资源",
+   "type": 1,
+   "api": "https://api.wujinapi.me/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_49f59375bd",
+   "name": "🎬红牛资源",
+   "type": 1,
+   "api": "https://www.hongniuzy2.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_13b0386d17",
+   "name": "🎬U酷影视",
+   "type": 1,
+   "api": "https://api.ukuapi88.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_0a7eae9535",
+   "name": "🎬索尼资源",
+   "type": 1,
+   "api": "https://suoniapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_8819527386",
+   "name": "🎬极速资源",
+   "type": 1,
+   "api": "https://jszyapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_462ef6ab60",
+   "name": "🎬光速资源",
+   "type": 1,
+   "api": "https://api.guangsuapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_8468aa5e6c",
+   "name": "🎬最大资源",
+   "type": 1,
+   "api": "https://api.zuidapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_b7b2f325b2",
+   "name": "ffzy4",
+   "type": 1,
+   "api": "https://ffzy4.tv/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_1378d1322d",
+   "name": "ffzy3",
+   "type": 1,
+   "api": "https://ffzy3.tv/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_c8d8071c3f",
+   "name": "ffzyapi",
+   "type": 1,
+   "api": "https://cj.ffzyapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_ed51080ef8",
+   "name": "🎬无尽影视",
+   "type": 1,
+   "api": "https://api.wujinapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_35175d3e51",
+   "name": "🎬金鹰点播",
+   "type": 1,
+   "api": "https://jinyingzy.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_e33a4ccba8",
+   "name": "🎬鸭鸭资源",
+   "type": 1,
+   "api": "https://cj.yayazy.net/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_66f1d0e566",
+   "name": "🎬魔都动漫",
+   "type": 1,
+   "api": "https://caiji.moduapi.cc/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_1155e267cc",
+   "name": "🎬新浪资源",
+   "type": 1,
+   "api": "https://api.xinlangapi.com/xinlangapi.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_122ebed9ed",
+   "name": "lziapi",
+   "type": 1,
+   "api": "https://cj.lziapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_14fc643513",
+   "name": "🎬天涯影视",
+   "type": 1,
+   "api": "https://tyyszy.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_8c21f70237",
+   "name": "🎬飘零资源",
+   "type": 1,
+   "api": "https://p2100.net/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_0ed529a144",
+   "name": "🎬闪电资源",
+   "type": 1,
+   "api": "https://xsd.sdzyapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_898414e6f3",
+   "name": "🎬樱花资源",
+   "type": 1,
+   "api": "https://m3u8.apiyhzy.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_db5eab2658",
+   "name": "🎬-爱奇艺-",
+   "type": 1,
+   "api": "https://iqiyizyapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_b6b3fe5637",
+   "name": "iqiyi资源",
+   "type": 1,
+   "api": "https://www.iqiyizyapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_d3142ca01a",
+   "name": "🎬金鹰资源",
+   "type": 1,
+   "api": "https://jyzyapi.com/provide/vod/from/jinyingyun/at/json",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_ba84c0a936",
+   "name": "🎬速播资源",
+   "type": 1,
+   "api": "https://subocaiji.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_0a7f01783f",
+   "name": "🎬虎牙资源",
+   "type": 1,
+   "api": "https://www.huyaapi.com/api.php/provide/vod/at/json",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_eb826ff67f",
+   "name": "🎬快车资源",
+   "type": 1,
+   "api": "https://caiji.kuaichezy.org/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_2ac93c85ec",
+   "name": "🎬电影天堂",
+   "type": 1,
+   "api": "http://caiji.dyttzyapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  },
+  {
+   "key": "sub_0cdf4a190e",
+   "name": "🎬非凡资源",
+   "type": 1,
+   "api": "https://api.ffzyapi.com/api.php/provide/vod",
+   "searchable": 1,
+   "quickSearch": 1,
+   "filterable": 1,
+   "changeable": 1,
+   "playerType": 1
+  }
+ ]
+}

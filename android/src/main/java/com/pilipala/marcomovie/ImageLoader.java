@@ -31,6 +31,11 @@ final class ImageLoader {
     private ImageLoader() {}
 
     static void cancel(MainActivity a) {
+        MainActivity.flicker(
+                "IMAGES_CANCEL generation="
+                        + a.generation
+                        + " requests="
+                        + a.artworkRequests.size());
         synchronized (IN_FLIGHT) {
             IN_FLIGHT.clear();
         }
@@ -49,6 +54,15 @@ final class ImageLoader {
     }
 
     static void poster(MainActivity a, String address, ImageView image, boolean detail) {
+        MainActivity.flicker(
+                "POSTER_BIND image="
+                        + System.identityHashCode(image)
+                        + " url="
+                        + address.hashCode()
+                        + " generation="
+                        + a.generation
+                        + " hasDrawable="
+                        + (image.getDrawable() != null));
         image.setTag(address);
         if (!Cms.isHttp(address) && !address.startsWith("catpaw://")) {
             if (!address.isEmpty())
@@ -63,12 +77,24 @@ final class ImageLoader {
                 ImageDecodePolicy.cacheKey(address, initialW, initialH, initialCrop, detail);
         Bitmap immediate = a.images.get(initialKey);
         if (immediate != null && !immediate.isRecycled()) {
+            MainActivity.flicker(
+                    "POSTER_CACHE image="
+                            + System.identityHashCode(image)
+                            + " generation="
+                            + ticket
+                            + " kind=exact");
             image.setImageBitmap(immediate);
             com.pilipala.glass.GlassworkSurface.invalidateBackdrop(image);
             return;
         }
         Bitmap preview = a.images.get(address);
         if (preview != null && !preview.isRecycled()) {
+            MainActivity.flicker(
+                    "POSTER_CACHE image="
+                            + System.identityHashCode(image)
+                            + " generation="
+                            + ticket
+                            + " kind=preview");
             image.setImageBitmap(preview);
             com.pilipala.glass.GlassworkSurface.invalidateBackdrop(image);
             if (!detail || (preview.getWidth() >= initialW && preview.getHeight() >= initialH)) {
@@ -81,6 +107,13 @@ final class ImageLoader {
     private static void startPosterLoad(
             MainActivity a, String address, ImageView image, boolean detail, final int ticket) {
         if (ticket != a.generation || !address.equals(image.getTag())) return;
+        MainActivity.flicker(
+                "POSTER_LOAD image="
+                        + System.identityHashCode(image)
+                        + " url="
+                        + address.hashCode()
+                        + " generation="
+                        + ticket);
         final int width = ImageDecodePolicy.targetWidth(image.getWidth(), detail);
         final int height = ImageDecodePolicy.targetHeight(image.getHeight(), detail);
         final boolean crop = image.getScaleType() == ImageView.ScaleType.CENTER_CROP;
@@ -173,6 +206,12 @@ final class ImageLoader {
                                                 for (ImageView target : targets) {
                                                     if (target != null
                                                             && address.equals(target.getTag())) {
+                                                        MainActivity.flicker(
+                                                                "POSTER_APPLY image="
+                                                                        + System.identityHashCode(
+                                                                                target)
+                                                                        + " generation="
+                                                                        + ticket);
                                                         target.setImageBitmap(bitmap);
                                                         com.pilipala.glass.GlassworkSurface
                                                                 .invalidateBackdrop(target);
