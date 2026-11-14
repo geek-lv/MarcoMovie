@@ -116,9 +116,7 @@ final class MobileShell {
     private Runnable resumeHome;
     Runnable reloadCategory;
 
-    /** 豆瓣大类提升到顶栏；跨主页重建记住选择，片单区只保留细分行。 */
-    private static int doubanMajor;
-
+    /** 豆瓣大类提升到顶栏；选择持久化在 Prefs.DOUBAN_MAJOR，片单区只保留细分行。 */
     private DoubanHot doubanGrid;
     private TextView doubanMajorPill;
     private FrameLayout retainedRoot;
@@ -757,8 +755,8 @@ final class MobileShell {
 
         // Right 1: 豆瓣大类入口。片源切换仍在设置页，首页不再放一个对豆瓣搜索无意义的线路按钮。
         String[] majorLabels = DoubanHot.majorLabels();
-        doubanMajor = Math.max(0, Math.min(doubanMajor, majorLabels.length - 1));
-        doubanMajorPill = a.text(majorLabels[doubanMajor] + " ▾", 12.5f, Color.WHITE);
+        doubanMajorPill =
+                a.text(majorLabels[DoubanHot.loadMajor(a.prefs)] + " ▾", 12.5f, Color.WHITE);
         doubanMajorPill.setTag("douban-major-switcher");
         doubanMajorPill.setTypeface(null, Typeface.BOLD);
         doubanMajorPill.setSingleLine(true);
@@ -776,9 +774,9 @@ final class MobileShell {
                                 "豆瓣片单",
                                 "选择大类，下方继续选择细分榜单",
                                 majorLabels,
-                                doubanMajor,
+                                DoubanHot.loadMajor(a.prefs),
                                 index -> {
-                                    doubanMajor = index;
+                                    DoubanHot.saveMajor(a.prefs, index);
                                     doubanMajorPill.setText(majorLabels[index] + " ▾");
                                     if (doubanGrid != null) doubanGrid.selectMajor(index);
                                 }));
@@ -1260,7 +1258,9 @@ final class MobileShell {
         int mMarginDp = 32;
         int mPosterW =
                 Math.max(48, (int) ((mWidthDp - mMarginDp - (mColumns - 1) * 14) / mColumns) - 8);
-        doubanGrid = DoubanHot.attachGrid(a, body, mColumns, mPosterW, false, doubanMajor);
+        doubanGrid =
+                DoubanHot.attachGrid(
+                        a, body, mColumns, mPosterW, false, DoubanHot.loadMajor(a.prefs));
         resumeHome = () -> doubanGrid.resume();
         reloadCategory = () -> doubanGrid.refresh(null);
         triggerPullRefresh[0] =

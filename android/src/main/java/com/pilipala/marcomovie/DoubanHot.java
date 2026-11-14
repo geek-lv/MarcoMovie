@@ -538,6 +538,25 @@ final class DoubanHot {
         return labels;
     }
 
+    static int clampMajor(int major) {
+        return Math.max(0, Math.min(major, GRID_MAJORS.length - 1));
+    }
+
+    /**
+     * TV / 手机共用的「上次选中的豆瓣一级大类」。写进 SharedPreferences，
+     * 因此杀进程、重启 App、冷启动首页都会恢复到用户最后选的那一项。
+     *
+     * <p>刻意不注册进 {@link Prefs#KEYS}：那份白名单用于「恢复默认设置」和
+     * 配置扫码同步，浏览状态既不该被设置重置清掉，也不该手机同步时覆盖电视自己的选择。
+     */
+    static int loadMajor(android.content.SharedPreferences prefs) {
+        return clampMajor(prefs.getInt(Prefs.DOUBAN_MAJOR, 0));
+    }
+
+    static void saveMajor(android.content.SharedPreferences prefs, int major) {
+        prefs.edit().putInt(Prefs.DOUBAN_MAJOR, clampMajor(major)).apply();
+    }
+
     /** TV 首页不渲染大类 chips 行时，把顶部的「大类 ▾」下拉挂进来供 DPad 连线。 */
     void setMajorSwitcher(View v) {
         majorSwitcher = v;

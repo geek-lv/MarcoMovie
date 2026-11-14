@@ -64,6 +64,8 @@ final class Prefs {
     static final String PREFERRED_SITE = "preferred_site_identity";
     static final String PREFERRED_LINE = "preferred_line";
     static final String LOADING_SITE = "loading_site";
+    /** 豆瓣片单上次选中的一级大类。刻意不进 KEYS：不被「恢复默认」清掉，也不随配置扫码同步覆盖。 */
+    static final String DOUBAN_MAJOR = "douban_major";
     static final String EXPERIMENTAL_CSP = "experimental_csp";
     static final String FAVORITES = "favorites";
     static final String WATCH_HISTORY = "watch_history";

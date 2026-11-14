@@ -3,6 +3,7 @@ package com.pilipala.marcomovie;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -24,9 +25,6 @@ import org.json.JSONObject;
  * 片源自身的片库仍可从遥控器 MENU 键、搜索、收藏进入。
  */
 final class HomeScreen {
-    /** TV 首页把豆瓣三大类收敛成下拉后，跨首页重建记住上次选择（与手机端 doubanMajor 对齐）。 */
-    private static int tvDoubanMajor = 0;
-
     final MainActivity a;
     final Cms.Site site;
     final int COLUMNS;
@@ -125,7 +123,9 @@ final class HomeScreen {
         // 与手机端一致：一级「剧集 / 电影 / 综艺」放顶部下拉，片单区只保留一层细分榜单。
         // 首页本来就不该有「切换线路」按钮 —— 搜索永远遍历所有片源。
         majorHeading();
-        douban = DoubanHot.attachGrid(a, a.body, COLUMNS, posterWidth, false, tvDoubanMajor);
+        douban =
+                DoubanHot.attachGrid(
+                        a, a.body, COLUMNS, posterWidth, false, DoubanHot.loadMajor(a.prefs));
         if (majorPill != null) douban.setMajorSwitcher(majorPill);
         retainedRoot = a.root;
         retainedBody = a.body;
@@ -211,7 +211,6 @@ final class HomeScreen {
      */
     void majorHeading() {
         final String[] labels = DoubanHot.majorLabels();
-        tvDoubanMajor = Math.max(0, Math.min(tvDoubanMajor, labels.length - 1));
         LinearLayout heading = a.row();
         heading.setTag("douban-major-heading");
         heading.setGravity(Gravity.CENTER_VERTICAL);
@@ -221,12 +220,50 @@ final class HomeScreen {
         TextView title = a.text("豆瓣片单", 16f, MainActivity.WHITE);
         title.setTypeface(null, Typeface.BOLD);
         heading.addView(title, new LinearLayout.LayoutParams(0, -2, 1f));
-        majorPill = pill(labels[tvDoubanMajor] + "  ▾", "douban-major-switcher", this::chooseMajor);
-        majorPill.setTextSize(13f * navScale);
+        majorPill =
+                glassMajorPill(
+                        labels[DoubanHot.loadMajor(a.prefs)] + "  ▾",
+                        "douban-major-switcher",
+                        this::chooseMajor);
         heading.addView(
                 majorPill,
                 new LinearLayout.LayoutParams(-2, a.dp(Math.round(32 * navScale))));
         a.body.addView(heading, new LinearLayout.LayoutParams(-1, -2));
+    }
+
+    /**
+     * 液态玻璃版的一级大类下拉：与手机端右上角胶囊共用 {@code a.glass(view, 999)}
+     * 的 GlassworkSurface（背景折射 + 上缘白色高光 + 下缘暗边）。
+     *
+     * <p>不能复用 {@link #pill}：那套焦点反馈走 FocusMotion.style，会直接
+     * {@code setBackground(new GradientDrawable(...))} 把玻璃材质盖回纯色。这里改用
+     * foreground 描边 + 轻微缩放/抬升，既不碰 background，遥控器 DPad 上也一眼看得出焦点；
+     * 用户开启「降低透明度」时玻璃退化为纯色，焦点环依然有效。
+     */
+    TextView glassMajorPill(String label, String tag, Runnable action) {
+        TextView b = a.text(label, 13f * navScale, MainActivity.WHITE);
+        single(b);
+        b.setTypeface(null, Typeface.BOLD);
+        b.setGravity(Gravity.CENTER);
+        b.setIncludeFontPadding(false);
+        int padH = a.dp(Math.round(16 * navScale));
+        b.setPadding(padH, 0, padH, 0);
+        focusable(b, tag);
+        a.glass(b, 999);
+
+        GradientDrawable ring = new GradientDrawable();
+        ring.setColor(Color.TRANSPARENT);
+        ring.setCornerRadius(a.dp(Math.round(16 * navScale)));
+        ring.setStroke(Math.max(1, a.dp(2)), 0xffffffff);
+        b.setOnFocusChangeListener(
+                (v, focused) -> {
+                    b.setForeground(focused ? ring : null);
+                    float s = focused ? 1.04f : 1f;
+                    b.animate().scaleX(s).scaleY(s).setDuration(140).start();
+                    b.setElevation(focused ? a.dp(6) : 0);
+                });
+        b.setOnClickListener(v -> action.run());
+        return b;
     }
 
     /** 遥控器友好的单选弹窗（AppDialog 的选项是可聚焦 Button，DPad 上下 + 确认即可）。 */
@@ -240,7 +277,7 @@ final class HomeScreen {
                         labels,
                         douban.currentMajor(),
                         (d, index) -> {
-                            tvDoubanMajor = index;
+                            DoubanHot.saveMajor(a.prefs, index);
                             if (majorPill != null) majorPill.setText(labels[index] + "  ▾");
                             douban.selectMajor(index);
                             douban.wire();

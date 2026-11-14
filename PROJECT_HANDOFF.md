@@ -9,6 +9,8 @@
 - 上游仓库：`origin = https://github.com/Pilipala9919/MarcoMovie.git`
 - 0.5.26（手机 UI / 豆瓣片单 / 牛皮癣模糊全链路）已在 `3f41daf` 提交、经 `9cfd212` 合并后推送到 `mine/develop`，不是未提交补丁；不要 reset 或 clean。
 - 0.5.27 起 TV 与手机端共用同一份 `adblur` 代码，模板只从手机扫码同步到电视（电视不提供采集入口）。
+- 0.5.28 起 TV 首页一级大类下拉改用与手机端同一套 `a.glass(v, 999)` 液态玻璃；两端选中大类由
+  `Prefs.DOUBAN_MAJOR`（运行时状态，不在 `Prefs.KEYS` 白名单内）持久化，重启后恢复。
 
 不要提交：
 
@@ -24,8 +26,8 @@ Android 部分主要采用 Java + 手写 Android View，不是 Compose，也没�
 
 当前版本：
 
-- Android TV：`0.5.27 / vCode 79`
-- Android 手机版：`0.5.27 / vCode 79`
+- Android TV：`0.5.28 / vCode 80`
+- Android 手机版：`0.5.28 / vCode 80`
 - minSdk 23，targetSdk 28
 
 关键文件：
